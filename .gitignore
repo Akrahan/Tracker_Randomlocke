@@ -1,0 +1,21 @@
+# Variables de entorno reales (las plantillas .env.*.example sí se versionan)
+.env
+.env.dev
+.env.prod
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editor, sistema y herramientas locales
+.vscode/
+.claude/
+Thumbs.db
+.DS_Store
+
+# Material local que no se publica
+Practica1.pdf
+CLAUDE.md

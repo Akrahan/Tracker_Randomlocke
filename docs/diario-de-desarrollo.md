@@ -40,4 +40,14 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** `.gitignore`, `.gitattributes` y `.editorconfig` son preventivos: solo protegen lo que entra **después** de crearlos, por eso van antes de cualquier código o secreto.
   Forzar LF y tabuladores evita que el `Makefile` y los scripts fallen en Linux (WSL y contenedores), y versionarlos hace que las reglas viajen con el proyecto a cualquiera que lo clone.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Opus 5.5 (`claude-opus-5-5`). Finalidad: explicar cada fichero y cada decisión, dar los comandos y el contenido de los ficheros de configuración, y revisar las salidas y los ficheros escritos por el alumno. Parte del trabajo: Fase 0, inicialización del repositorio y configuración base.
-- **Commit:** `chore: init repo with gitignore, gitattributes and editorconfig`
+- **Commit:** `chore: init repo with gitignore, gitattributes and editorconfig` (`2a547e8`), publicado con `git push -u origin main`
+
+### [Incidencia durante el Paso 0.3: push rechazado]
+- **Fecha:** 2026-10-09
+- **Archivos:** ninguno modificado por la incidencia
+- **Comandos:** `git push` (error 1: `Could not resolve hostname github.com`; error 2: `! [rejected] main -> main (fetch first)`). Diagnóstico previsto, solo lectura: `git fetch origin`, `git log --oneline --graph --all`, `git diff --stat main origin/main`.
+- **Justificación:** el primer error fue un fallo de DNS en WSL (ajeno al repositorio y a la clave SSH). El segundo indica que `origin/main` contiene commits que no están en local; Git lo impide para no sobrescribir trabajo ajeno. Regla adoptada: no usar `git push --force` sin saber antes qué contiene el remoto.
+- **Resolución:** _pendiente de completar tras revisar el contenido del commit remoto._
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: interpretar los errores y proponer un diagnóstico seguro. Parte del trabajo: Fase 0, publicación del Paso 0.3.
+- **Commit:** ninguno por esta incidencia.
+

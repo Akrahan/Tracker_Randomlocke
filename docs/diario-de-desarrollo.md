@@ -10,9 +10,9 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Comandos:**
   - PowerShell: `wsl -l -v`, `docker --version`, `docker compose version`, `docker run --rm hello-world`, `git --version`, `git config --global user.name`, `git config --global user.email`, `netstat -ano | findstr :8000`, `netstat -ano | findstr :8080`, `python --version`
   - WSL (Ubuntu 22.04): `docker --version`, `docker compose version`, `docker run --rm hello-world`, `make --version`, `git --version`, `docker pull python:3.12-slim`, `docker pull postgres:16`, `docker pull redis:7-alpine`, `ssh -T git@github.com`
-  - Resultado: WSL2, Docker 29.8.1, Compose v5.5.1, GNU Make 4.3 en WSL y puertos 8000/8080 libres; imágenes base descargadas. Se activó la integración Docker–WSL, que estaba desactivada. SSH a GitHub sin clave: se usará HTTPS.
-- **Justificación:** se cierra la decisión 2: `make` y `docker` se ejecutan en WSL (entorno Linux, como los contenedores) y Git en Windows, con HTTPS y Git Credential Manager.
-  El riesgo de finales de línea CRLF en el `Makefile` se mitigará en el Paso 0.2 con `.gitattributes` (LF) y `core.autocrlf`.
+  - Resultado: WSL2, Docker 29.8.1, Compose v5.5.1, GNU Make 4.3 en WSL y puertos 8000/8080 libres; imágenes base descargadas. Se activó la integración Docker–WSL, que estaba desactivada. Se corrigió el email de Git (dominio `.eu`). SSH a GitHub sin clave todavía (`Permission denied`, esperado): se crea en el Paso 0.2.
+- **Justificación:** se cierra la decisión 2: `make` y `docker` se ejecutan en WSL (entorno Linux, como los contenedores). Inicialmente Git iba en Windows con HTTPS; ver la actualización final de esta entrada, que es la decisión vigente.
+  El riesgo de finales de línea CRLF en el `Makefile` se mitiga en el Paso 0.2 con `.gitattributes` (LF) y `.editorconfig`.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Opus 5.5 (`claude-opus-5-5`). Finalidad: explicar qué se comprueba y por qué, dar los comandos y revisar las salidas. Parte del trabajo: Fase 0, verificación del entorno y cierre de la decisión 2.
 - **Commit:** sin commit (paso de verificación). El diario se versionará en el Paso 0.2.
 - **Actualización (2026-10-08):** se revisa la decisión 2: Git también se ejecuta en WSL, autenticado por SSH, y VS Code se abre en modo WSL. Motivo: un único entorno Linux para Git, `make` y `docker`, sin dos instalaciones de Git sobre la misma carpeta.
@@ -42,12 +42,27 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Opus 5.5 (`claude-opus-5-5`). Finalidad: explicar cada fichero y cada decisión, dar los comandos y el contenido de los ficheros de configuración, y revisar las salidas y los ficheros escritos por el alumno. Parte del trabajo: Fase 0, inicialización del repositorio y configuración base.
 - **Commit:** `chore: init repo with gitignore, gitattributes and editorconfig` (`2a547e8`), publicado con `git push -u origin main`
 
+### [Paso 0.3: estructura de carpetas]
+- **Fecha:** 2026-10-08 (commit) y 2026-10-09 (publicación, tras la incidencia de abajo)
+- **Archivos:** `app/static/.gitkeep`
+- **Comandos:** `mkdir -p app/static`, `touch app/static/.gitkeep`, `git status --short --untracked-files=all`, `git add .`, `git commit -m "..."`, `git push`
+- **Decisiones:**
+  - Git no guarda carpetas vacías, así que se usa un fichero vacío `.gitkeep` para que `app/static/` exista al clonar el repositorio (si no, un Dockerfile o la app que la esperen fallarían en una máquina limpia).
+  - Opción A: solo se crea `app/static/` ahora. `db/` se crea en el Paso 2.1 únicamente si se elige la inicialización con scripts de `initdb.d` (decisión 5); si se elige SQL idempotente al arrancar la app, la carpeta no haría falta. Motivo: simplicidad, sin carpetas sin uso.
+- **Justificación:** la estructura de `app/` (API, Dockerfile, `requirements.txt` y frontend estático servido por la propia API) refleja la arquitectura acordada de un único contenedor `web` con un solo puerto publicado.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelos Claude Opus 5.5 (`claude-opus-5-5`) y Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar el problema de las carpetas vacías y las dos opciones, y revisar las salidas. Parte del trabajo: Fase 0, estructura de carpetas.
+- **Commit:** `chore: add app/static folder structure` (`87bacab` tras el rebase)
+
 ### [Incidencia durante el Paso 0.3: push rechazado]
 - **Fecha:** 2026-10-09
-- **Archivos:** ninguno modificado por la incidencia
-- **Comandos:** `git push` (error 1: `Could not resolve hostname github.com`; error 2: `! [rejected] main -> main (fetch first)`). Diagnóstico previsto, solo lectura: `git fetch origin`, `git log --oneline --graph --all`, `git diff --stat main origin/main`.
-- **Justificación:** el primer error fue un fallo de DNS en WSL (ajeno al repositorio y a la clave SSH). El segundo indica que `origin/main` contiene commits que no están en local; Git lo impide para no sobrescribir trabajo ajeno. Regla adoptada: no usar `git push --force` sin saber antes qué contiene el remoto.
-- **Resolución:** _pendiente de completar tras revisar el contenido del commit remoto._
-- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: interpretar los errores y proponer un diagnóstico seguro. Parte del trabajo: Fase 0, publicación del Paso 0.3.
-- **Commit:** ninguno por esta incidencia.
+- **Archivos:** `docs/diario-de-desarrollo.md` (conflicto resuelto a mano)
+- **Comandos:** `git push` (error 1: `Could not resolve hostname github.com`; error 2: `! [rejected] main -> main (fetch first)`). Diagnóstico, solo lectura: `git fetch origin`, `git log --oneline --graph --all`, `git diff --stat main origin/main`, `git show origin/main`. Resolución: `git pull --rebase origin main`, edición del conflicto, `git add`, `git rebase --continue`, `git push`.
+- **Causa:**
+  - Error 1: fallo temporal de DNS en WSL, ajeno al repositorio y a la clave SSH. Se resolvió solo al reintentar.
+  - Error 2: el diario se había editado directamente en la web de GitHub (commit `b98dcbc`, "Update diario-de-desarrollo.md"). `origin/main` y la rama local divergían desde `2a547e8`, y Git rechaza el push para no sobrescribir commits que no tiene.
+- **Resolución:** se revisó el contenido del commit remoto con `git show origin/main`: solo cambiaba la línea `Commit:` del Paso 0.2 (con un espacio de más tras `chore:`). Esa misma línea se había corregido también en local, por lo que `git pull --rebase` produjo un conflicto en ella. Se conservó la versión local (con el hash y cómo se publicó) y se descartó la de la web. El historial quedó lineal, sin commit de fusión, y el push posterior fue correcto.
+- **Justificación:** se eligió `rebase` y no `merge` por ser un repositorio de una sola persona (historial lineal más fácil de leer). No se usó `git push --force`, que habría borrado el commit remoto sin saber qué contenía.
+- **Reglas adoptadas:** (1) no editar ficheros desde la web de GitHub; todo se cambia en local y se sube con `push`. (2) No usar `--force` sin revisar antes qué contiene el remoto. (3) Mensajes de commit con `git commit -m "..."` para no abrir un editor.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: interpretar los errores, proponer un diagnóstico seguro y guiar la resolución del conflicto de rebase. Parte del trabajo: Fase 0, publicación del Paso 0.3.
+- **Commit:** `docs: log push rejection incident` (`d954c33` tras el rebase)
 

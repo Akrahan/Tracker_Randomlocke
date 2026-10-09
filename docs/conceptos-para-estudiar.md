@@ -1,0 +1,334 @@
+# Conceptos para estudiar
+
+Guía de estudio para entender y defender la Práctica 1. Cada concepto explica qué es, para qué sirve, cómo se usa en este proyecto y por qué se decidió así. Se amplía a medida que avanzan los pasos.
+
+Los valores que aparecen son siempre ficticios.
+
+## Índice
+
+1. [Docker](#1-docker): imagen, contenedor, capas, usuario no root
+2. [Docker Compose](#2-docker-compose): YAML, servicios, `name`, `docker-compose.dev.yml`
+3. [Datos y configuración](#3-datos-y-configuración): volúmenes, variables de entorno, `.env`
+4. [Salud, red y seguridad](#4-salud-red-y-seguridad): healthcheck, `depends_on`, puertos, red interna
+5. [Git y repositorio](#5-git-y-repositorio): `.gitignore`, `.gitattributes`, `.editorconfig`, LF/CRLF, SSH, rebase
+6. [Entorno de trabajo](#6-entorno-de-trabajo): WSL, NTFS y permisos
+7. [Automatización](#7-automatización): Make y Makefile
+8. [Aplicación y base de datos](#8-aplicación-y-base-de-datos): PostgreSQL, `psql`, FastAPI, *append-only*
+9. [Caché](#9-caché): Redis, *cache-aside*, TTL
+
+---
+
+## 1. Docker
+
+### Imagen
+- **Qué es:** una plantilla de solo lectura con un programa y todo lo que necesita para ejecutarse (sistema base, librerías, configuración). No se ejecuta por sí sola. Ejemplo: `postgres:16`.
+- **Para qué se usa:** para que el programa funcione igual en cualquier máquina, sin instalarlo a mano.
+- **Dónde y cómo se usa en mi proyecto:** `db` usa la imagen oficial `postgres:16`, `cache` usará `redis:7-alpine` y `web` usará una imagen propia construida con un `Dockerfile` sobre `python:3.12-slim`.
+- **Por qué así:** se fija siempre una versión (nunca `latest`). Un `latest` puede cambiar sin avisar y, en una base de datos, una actualización de versión mayor puede dejar los datos ilegibles.
+- **Pregunta de defensa:** ¿por qué no usas `postgres:latest`?
+
+### Contenedor
+- **Qué es:** una imagen en ejecución. Es un proceso aislado del resto del sistema, con su propio sistema de ficheros y su propia red.
+- **Para qué se usa:** ejecutar aplicaciones aisladas entre sí y reproducibles.
+- **Dónde y cómo se usa en mi proyecto:** cada servicio del compose se convierte en un contenedor (`randomlocke-dev-db-1`, etc.).
+- **Por qué así:** el contenedor es **desechable**: al borrarlo, lo que había dentro desaparece. De ahí que los datos vivan en un volumen.
+- **Pregunta de defensa:** ¿qué diferencia hay entre una imagen y un contenedor?
+
+### Capas y caché de build (pendiente de ver en el paso 1.3)
+- **Qué es:** una imagen se construye con una capa por cada instrucción del `Dockerfile`. Docker reutiliza las capas que no han cambiado.
+- **Para qué se usa:** que reconstruir la imagen sea rápido.
+- **Dónde y cómo se usa en mi proyecto:** en el `Dockerfile` de `web`, las dependencias (`requirements.txt`) se instalan en una capa propia **antes** de copiar el código. Si solo cambia el código, no se reinstalan las dependencias.
+- **Por qué así:** el código cambia constantemente y las dependencias casi nunca.
+- **Pregunta de defensa:** ¿por qué se copia `requirements.txt` antes que el resto del código?
+
+### `slim` frente a `alpine` (pendiente de ver en el paso 1.3)
+- **Qué es:** variantes reducidas de una imagen base. `slim` es Debian recortado; `alpine` usa otra librería de C (musl) y es aún más pequeña.
+- **Dónde y cómo se usa en mi proyecto:** `python:3.12-slim` para `web`; `redis:7-alpine` para `cache`.
+- **Por qué así:** con Python, `slim` evita problemas de compatibilidad de paquetes compilados que a veces da `alpine`. Redis no tiene ese problema, y ahí `alpine` ahorra tamaño.
+- **Pregunta de defensa:** ¿por qué `slim` para Python y `alpine` para Redis?
+
+### Usuario no root (pendiente de ver en el paso 1.3)
+- **Qué es:** por defecto, el proceso de un contenedor corre como `root`. Un usuario no root tiene permisos limitados.
+- **Para qué se usa:** reducir el daño si alguien consigue ejecutar código dentro del contenedor.
+- **Dónde y cómo se usa en mi proyecto:** el `Dockerfile` de `web` crea un usuario sin privilegios y ejecuta la aplicación con él.
+- **Por qué así:** es una medida básica de seguridad que el enunciado recomienda.
+- **Pregunta de defensa:** ¿qué ventaja de seguridad aporta no ejecutar como root?
+
+---
+
+## 2. Docker Compose
+
+### Docker Compose
+- **Qué es:** una herramienta que describe en un fichero **varios contenedores** y cómo se relacionan (red, volúmenes, variables) y los levanta con un solo comando.
+- **Para qué se usa:** evitar lanzar a mano varios `docker run` largos y propensos a errores.
+- **Dónde y cómo se usa en mi proyecto:** `docker-compose.dev.yml` (web y db) y `docker-compose.prod.yml` (web, db y cache). Se invoca con `docker compose` (v2, con espacio, no `docker-compose`).
+- **Por qué así:** es lo que pide el enunciado. Es declarativo: se describe cómo debe ser el sistema y Compose lo construye.
+- **Pregunta de defensa:** ¿qué ventaja tiene Compose frente a ejecutar `docker run` para cada servicio?
+
+### YAML
+- **Qué es:** un formato de texto para configuración, donde la estructura se marca con **sangría** (espacios, nunca tabuladores).
+- **Dónde y cómo se usa en mi proyecto:** todos los ficheros de Compose. `.editorconfig` fuerza 2 espacios en `*.yml`.
+- **Por qué así:** una sangría incorrecta cambia el significado del fichero o lo rompe. La sangría **es la jerarquía**: cada nivel son 2 espacios más. Caso real del proyecto: el bloque `healthcheck:` se escribió sin sangría, fuera de `db`, y Compose lo rechazó; hay que subirlo a 4 espacios para que sea propiedad del servicio. `docker compose config --quiet` lo detecta.
+- **Pregunta de defensa:** ¿qué pasa si mezclas tabuladores y espacios en un YAML?
+
+### Servicio (`services:`)
+- **Qué es:** cada pieza del sistema que Compose gestiona; cada servicio genera uno o más contenedores.
+- **Dónde y cómo se usa en mi proyecto:** `web`, `db` y (solo en prod) `cache`. El nombre del servicio sirve además de **dirección en la red interna**: `web` llegará a la base de datos usando el host `db`, por eso `DB_HOST=db` coincide con el nombre del servicio.
+- **Por qué así:** evita direcciones IP, que cambian al recrear contenedores.
+- **Pregunta de defensa:** ¿cómo encuentra `web` a la base de datos sin conocer su IP?
+
+### `name:` (nombre del proyecto)
+- **Qué es:** el prefijo que Compose pone a contenedores, redes y volúmenes.
+- **Dónde y cómo se usa en mi proyecto:** `name: randomlocke-dev` en el compose de dev y uno distinto en prod.
+- **Por qué así:** así dev y prod pueden coexistir en la misma máquina sin pisarse.
+- **Pregunta de defensa:** ¿qué pasaría si dev y prod usaran el mismo nombre de proyecto?
+
+### Dos ficheros de Compose independientes
+- **Qué es:** un fichero por entorno, sin depender uno de otro.
+- **Dónde y cómo se usa en mi proyecto:** `docker-compose.dev.yml` y `docker-compose.prod.yml`.
+- **Por qué así:** lo exige el enunciado. La alternativa habitual es un fichero base más un *override* (`-f base.yml -f prod.yml`), que evita repetir texto pero no cumple el enunciado tal cual.
+- **Pregunta de defensa:** ¿por qué dos ficheros separados en vez de uno base con *overrides*?
+
+---
+
+## 3. Datos y configuración
+
+### Volumen con nombre
+- **Qué es:** un espacio de almacenamiento gestionado por Docker que **vive fuera del contenedor**.
+- **Para qué se usa:** que los datos sobrevivan a que el contenedor se borre o se recree.
+- **Dónde y cómo se usa en mi proyecto:** la base de datos guarda sus ficheros en un volumen montado en `/var/lib/postgresql/data`.
+- **Por qué así:** es el requisito de persistencia del enunciado. Se prefiere al *bind mount* (carpeta del host) porque en `/mnt/c` (NTFS) Postgres puede fallar por los permisos.
+- **Qué lo borra:** `docker compose down` **conserva** el volumen; `down -v` lo **elimina**. Por eso `make down` no usa `-v` y `make clean` sí.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `down` y `down -v`, y qué pasa con los datos en cada caso?
+
+### Declaración del volumen (`volumes:` de nivel superior)
+- **Qué es:** un volumen se usa en **dos sitios** del compose. Dentro del servicio, `pgdata:/var/lib/postgresql/data` dice "monta el volumen `pgdata` en esta carpeta del contenedor". Al final del fichero, sin sangría, `volumes:` + `pgdata:` **declara** que ese volumen existe.
+- **Dónde y cómo se usa en mi proyecto:** `docker-compose.dev.yml` tiene el servicio `db` con su montaje y, al final, la declaración `pgdata:`.
+- **Por qué así:** sin la declaración, Compose da error por volumen no definido. Dejar `pgdata:` sin nada detrás significa un volumen normal gestionado por Docker. Declararlo aparte permite que varios servicios compartan el mismo volumen.
+- **Pregunta de defensa:** ¿qué diferencia hay entre el `volumes:` de dentro del servicio y el del final del fichero?
+
+### Bind mount
+- **Qué es:** enlazar una carpeta concreta del host con una carpeta del contenedor.
+- **Por qué no se usa para la BD:** en NTFS los permisos de Linux no se respetan y Postgres puede negarse a arrancar. Sí es útil para ver el código en desarrollo sin reconstruir.
+- **Pregunta de defensa:** ¿cuándo elegirías un bind mount en vez de un volumen con nombre?
+
+### Variables de entorno
+- **Qué es:** pares `NOMBRE=valor` que se pasan a un programa al arrancar.
+- **Para qué se usa:** configurar el programa sin escribir los valores en el código.
+- **Dónde y cómo se usa en mi proyecto:** usuario, contraseña y nombre de la BD, host de la BD, puerto de `web` e interruptor de la caché. El enunciado prohíbe credenciales en el código y en los YAML.
+- **Por qué así:** la alternativa profesional son los *Docker secrets* o un gestor de secretos (Vault...). Aquí sería excesivo, pero conviene saber explicarlo.
+- **Pregunta de defensa:** ¿cómo evitas que haya credenciales en el repositorio y qué usarías en un entorno real?
+
+### Interpolación (`${VARIABLE}`)
+- **Qué es:** en el YAML se escribe `${POSTGRES_PASSWORD}` y Compose lo sustituye por el valor leído del `.env`.
+- **Dónde y cómo se usa en mi proyecto:** en `docker-compose.*.yml`, que solo contienen nombres de variables, no valores.
+- **Por qué así:** el YAML se puede subir a GitHub sin riesgo.
+- **Pregunta de defensa:** si el YAML dice `${POSTGRES_PASSWORD}`, ¿de dónde sale el valor?
+
+### `environment:` frente a `env_file:`
+- **Qué es:** dos formas de pasar variables a un contenedor. `environment:` lista una a una las que recibe; `env_file:` le pasa **todo** el contenido de un fichero.
+- **Para qué se usa:** que el programa del contenedor se configure al arrancar. La imagen de Postgres lee `POSTGRES_USER`, `POSTGRES_PASSWORD` y `POSTGRES_DB` la **primera vez** que arranca con un volumen vacío y crea con ellas el usuario, la contraseña y la base de datos.
+- **Dónde y cómo se usa en mi proyecto:** el servicio `db` usa `environment:` con `POSTGRES_USER: ${POSTGRES_USER}` y las otras dos. A la izquierda va el nombre que **espera la imagen** (no se puede cambiar) y a la derecha la interpolación.
+- **Ojo con el volumen:** Postgres solo lee estas variables cuando el volumen está **vacío**. Si cambias `POSTGRES_PASSWORD` después con el volumen ya creado, la contraseña guardada no cambia; hay que borrar el volumen (`down -v`, o `make clean`) o cambiarla desde dentro de la BD.
+- **Por qué así:** con `environment:` cada servicio recibe solo lo que necesita (mínimo privilegio). Con `env_file: .env.dev`, `db` recibiría también variables ajenas, como `WEB_PORT`. `env_file` es más corto, pero menos preciso.
+- **Pregunta de defensa:** ¿por qué pasas las variables una a una en vez de usar `env_file`?
+
+### `--env-file` y la lectura del fichero de variables
+- **Qué es:** Compose lee automáticamente un fichero llamado `.env`, pero **no** `.env.dev`. La opción `--env-file .env.dev` le indica cuál usar para resolver las interpolaciones `${...}` del YAML.
+- **Dónde y cómo se usa en mi proyecto:** el `Makefile` (paso 1.6) lo añade siempre: `docker compose --env-file .env.dev -f docker-compose.dev.yml ...`. Prod usará `.env.prod`.
+- **Por qué así:** el enunciado pide un `.env` por entorno, así que los ficheros no se llaman `.env`. Sin esta opción, Compose avisa con `The "POSTGRES_USER" variable is not set. Defaulting to a blank string`. No es un error del YAML: Compose no sabe dónde buscar los valores.
+- **Pregunta de defensa:** ¿cómo sabe Compose de qué fichero sacar los valores de `${POSTGRES_PASSWORD}`?
+
+### Comandos del ciclo de vida: `up -d`, `ps`, `exec`, `down` (paso 1.2)
+- **Qué es:** `up -d` crea y arranca los servicios en segundo plano (*detached*); `ps` lista los contenedores con su estado y puertos; `exec` ejecuta un comando **dentro** de un contenedor en marcha; `down` para y elimina contenedores y red, pero conserva los volúmenes.
+- **Dónde y cómo se usa en mi proyecto:** `up -d db` arranca solo la base de datos; `exec db ...` lanza el `psql` de prueba que exige el enunciado; `ps` muestra `healthy` y confirma que `db` no publica puertos. El `Makefile` (paso 1.6) los envolverá en `make up-dev`, `make ps` y `make down`.
+- **Por qué así:** `exec` permite probar la conexión sin publicar el puerto de la BD ni instalar `psql` en tu máquina. Cada comando de Compose necesita `--env-file` y `-f` para saber qué entorno usar; en una sesión se puede abreviar con un `alias`, y de forma definitiva con el Makefile.
+- **Pregunta de defensa:** ¿cómo compruebas la conexión a la BD si no publica ningún puerto?
+
+### Cómo leer la columna PORTS de `docker compose ps` (paso 1.2)
+- **Qué es:** un servicio **publicado** muestra una flecha, por ejemplo `0.0.0.0:8000->8000/tcp` (puerto del host hacia el del contenedor). Uno que solo expone el puerto internamente muestra `5432/tcp`, sin flecha.
+- **Dónde y cómo se usa en mi proyecto:** `db` debe mostrar `5432/tcp` sin flecha: Postgres escucha dentro de la red de Docker, pero tu máquina no puede conectarse desde fuera.
+- **Por qué así:** es el requisito de "solo la aplicación web puede publicar puerto" del enunciado y la forma de demostrarlo.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `5432/tcp` y `0.0.0.0:5432->5432/tcp`?
+
+### `docker compose config --quiet`
+- **Qué es:** `config` valida el YAML y muestra la configuración ya resuelta. Con `--quiet` solo valida y no imprime nada si es correcto.
+- **Dónde y cómo se usa en mi proyecto:** `docker compose --env-file .env.dev -f docker-compose.dev.yml config --quiet`, para comprobar la sintaxis tras cada cambio.
+- **Por qué así:** sin `--quiet`, `config` imprime los **valores reales**, incluida la contraseña. Por eso no se ejecuta sin esa opción. Que no salga nada significa que todo va bien.
+- **Pregunta de defensa:** ¿por qué no es buena idea ejecutar `docker compose config` sin `--quiet` delante de otras personas?
+
+### `.env.dev`, `.env.prod` y plantillas `.env.*.example`
+- **Qué es:** los `.env` reales contienen los valores; las plantillas contienen los **nombres** con valores ficticios.
+- **Dónde y cómo se usa en mi proyecto:** `.env.dev.example` se sube a GitHub; `.env.dev` no (está en `.gitignore`). Los `.env` reales se entregan solo en el ZIP del campus, con credenciales exclusivas del proyecto.
+- **Por qué así:** quien clone el repo sabe qué variables definir sin ver tus secretos. Una contraseña subida a Git **queda en el historial aunque se borre después**.
+- **Incidencia real:** al crear la plantilla se escribió por error una contraseña real; se detectó antes del primer `git add` y se corrigió.
+- **Limitación:** `chmod 600` no tiene efecto en `/mnt/c` (NTFS); el fichero sigue `-rwxrwxrwx` y se documenta en el README.
+- **Pregunta de defensa:** si un `.env` se cuela en un commit y lo borras en el siguiente, ¿desaparece la contraseña del repositorio?
+
+---
+
+## 4. Salud, red y seguridad
+
+### Healthcheck
+- **Qué es:** un comando que Docker ejecuta periódicamente dentro del contenedor para comprobar que el servicio funciona. Estados: `starting`, `healthy`, `unhealthy`.
+- **Para qué se usa:** distinguir entre "el contenedor está arrancado" y "el servicio está listo".
+- **Dónde y cómo se usa en mi proyecto:** `db` con `pg_isready`, `cache` con `redis-cli ping`, `web` consultando su propio `/status`. El enunciado exige healthcheck en todos los contenedores.
+- **Parámetros:** `interval` (cada cuánto), `timeout` (cuánto espera), `retries` (fallos seguidos hasta `unhealthy`), `start_period` (gracia inicial, en la que los fallos no cuentan).
+- **Por qué así:** `db` se marca solo si acepta conexiones; `cache` caída no debe marcar `web` como `unhealthy` (ver `/status`).
+- **Pregunta de defensa:** ¿qué diferencia hay entre `depends_on` y un healthcheck?
+
+### Healthcheck de PostgreSQL: `pg_isready` y el escape `$$` (paso 1.2)
+- **Qué es:** `pg_isready` es un programa incluido en la imagen de Postgres que responde si el servidor acepta conexiones (código de salida 0 = sí). El campo `test: ["CMD-SHELL", "..."]` ejecuta ese texto como un comando de shell **dentro** del contenedor.
+- **Dónde y cómo se usa en mi proyecto:** en el servicio `db`: `pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}`, con `interval`, `timeout`, `retries` y `start_period`.
+- **Por qué `$$` y no `$`:** Compose interpreta `${VAR}` **al leer el YAML**, en tu máquina. Con `$${VAR}` escapa el símbolo y la variable la resuelve la **shell del contenedor**, que ya tiene `POSTGRES_USER` y `POSTGRES_DB` en su entorno. Así el valor no se expande en el YAML.
+- **Por qué `-U` y `-d`:** sin ellos, `pg_isready` comprueba con un usuario por defecto que no existe, y Postgres registra en sus logs un error `role "root" does not exist` en cada comprobación.
+- **Por qué `CMD-SHELL`:** la otra forma, `["CMD", "pg_isready", ...]`, ejecuta el programa directamente y no interpreta variables de entorno.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `${VAR}` y `$${VAR}` dentro de un compose?
+
+### `depends_on` con `condition: service_healthy` (pendiente de ver en el paso 1.4)
+- **Qué es:** indica que un servicio espera a otro. Sin condición, solo ordena el **arranque**; con `service_healthy`, espera a que esté **listo**.
+- **Dónde y cómo se usa en mi proyecto:** `web` espera a que `db` esté `healthy`.
+- **Por qué así:** si solo ordenara el arranque y Postgres tardara 10 segundos en aceptar conexiones, `web` fallaría al conectar.
+- **Pregunta de defensa:** si `depends_on` solo ordenara el arranque, ¿qué le pasaría a `web` con una BD lenta?
+
+### Puertos publicados (`ports`)
+- **Qué es:** abre una puerta entre el host y un contenedor (`"8000:8000"`).
+- **Dónde y cómo se usa en mi proyecto:** solo `web` tiene `ports` (8000 en dev y 8080 en prod). `db` y `cache` no publican nada.
+- **Por qué así:** el enunciado lo exige y reduce la superficie de ataque. Los contenedores se hablan por la red interna sin publicar nada.
+- **Pregunta de defensa:** ¿qué ocurre si publicas el puerto de la base de datos?
+
+### Red interna de Docker
+- **Qué es:** una red virtual donde los contenedores del mismo Compose se comunican por el nombre de su servicio.
+- **Dónde y cómo se usa en mi proyecto:** `web`, `db` y `cache` comparten red. En prod se valorará una segunda red `internal: true` para `db` y `cache` (paso 3.2).
+- **Por qué así:** una red `internal: true` no permite publicar puertos ni salir al exterior, así que `web` se conecta a dos redes: una normal (para publicar su puerto) y la interna.
+- **Pregunta de defensa:** ¿por qué `web` necesita estar en dos redes?
+
+---
+
+## 5. Git y repositorio
+
+### `.gitignore`
+- **Qué es:** lista de ficheros que Git no debe seguir.
+- **Dónde y cómo se usa en mi proyecto:** ignora los `.env` reales, cachés y entornos de Python, `.vscode/`, `.claude/`, `Practica1.pdf` y `CLAUDE.md`.
+- **Por qué así:** es **preventivo**: protege lo que entra después. Un fichero ya subido no deja de estarlo por añadirlo luego al `.gitignore`. Se usan reglas exactas (`.env.dev`) para que la plantilla `.env.dev.example` sí se suba.
+- **Pregunta de defensa:** ¿por qué se crea el `.gitignore` antes que los `.env`?
+
+### `.gitattributes` y finales de línea (LF y CRLF)
+- **Qué es:** Windows termina las líneas con CRLF y Linux con LF. `.gitattributes` le dice a Git cómo tratar los ficheros al guardarlos y sacarlos.
+- **Dónde y cómo se usa en mi proyecto:** `* text=auto eol=lf` fuerza LF y marca imágenes y PDF como binarios.
+- **Por qué así:** un `Makefile` o un script con CRLF falla en Linux (`missing separator`, `bad interpreter`). Es una regla del **proyecto** y viaja con el repositorio, a diferencia de `core.autocrlf`, que es una preferencia de cada máquina.
+- **Pregunta de defensa:** ¿qué falla en un `Makefile` con CRLF y cómo lo evitas?
+
+### `.editorconfig`
+- **Qué es:** reglas de escritura para el editor (UTF-8, LF, salto final, sangría).
+- **Dónde y cómo se usa en mi proyecto:** 4 espacios por defecto, 2 en YAML y Markdown y **tabuladores en el `Makefile`**.
+- **Por qué así:** actúa mientras escribes; `.gitattributes` actúa al guardar en Git. Son dos capas, y solo `.editorconfig` protege los tabuladores del `Makefile`.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `.gitattributes` y `.editorconfig`?
+
+### `.gitkeep`
+- **Qué es:** un fichero vacío que obliga a Git a guardar una carpeta, porque Git solo sigue ficheros.
+- **Dónde y cómo se usa en mi proyecto:** `app/static/.gitkeep`.
+- **Por qué así:** sin él, quien clone el repo no tendría la carpeta y algo que la espere fallaría. La alternativa es un `.gitignore` interno, útil cuando el contenido nunca debe subirse.
+- **Pregunta de defensa:** si creas una carpeta vacía y haces commit, ¿llega al repositorio?
+
+### Autenticación por SSH
+- **Qué es:** un par de claves: la **privada** se queda en tu máquina y la **pública** se da a GitHub. GitHub comprueba que tienes la privada sin que viaje por la red.
+- **Dónde y cómo se usa en mi proyecto:** clave `ed25519` creada en WSL (`~/.ssh`), pública añadida en GitHub. La privada tiene passphrase.
+- **Por qué así:** es más segura que una contraseña. La clave pública no da acceso a nadie; nunca se comparte la privada. En la primera conexión se debe comparar la huella de `github.com` antes de aceptarla (protege de un ataque de intermediario).
+- **Pregunta de defensa:** ¿qué puede hacer alguien que consiga tu clave pública?
+
+### Conventional Commits
+- **Qué es:** formato de mensajes de commit: `tipo(ámbito): descripción`.
+- **Dónde y cómo se usa en mi proyecto:** `chore:`, `feat:`, `docs:`, `build:`. Ejemplo: `chore(env): add dev environment variables template`.
+- **Por qué así:** el historial se lee como una lista ordenada de lo que se hizo, y se evalúa la organización del proyecto.
+- **Pregunta de defensa:** ¿qué significan `chore`, `feat` y el ámbito entre paréntesis?
+
+### Push rechazado, `rebase` y conflictos
+- **Qué es:** si el remoto tiene commits que tu copia no tiene, `git push` se rechaza. `git pull --rebase` reaplica tus commits encima de los remotos y deja un historial lineal. Si ambos tocaron la misma línea hay un **conflicto**, que se resuelve a mano.
+- **Dónde y cómo se usa en mi proyecto:** ocurrió al editar el diario en la web de GitHub y en local. Se resolvió con `pull --rebase`, conservando la versión local.
+- **Por qué así:** `rebase` en lugar de `merge` porque el repo es de una sola persona y queda un historial recto. No se usó `--force`, que habría borrado el commit remoto sin saber qué contenía.
+- **Reglas:** no editar en la web de GitHub; no usar `--force` sin revisar el remoto.
+- **Pregunta de defensa:** ¿por qué no usar `git push --force` para resolver un push rechazado?
+
+---
+
+## 6. Entorno de trabajo
+
+### WSL
+- **Qué es:** el subsistema de Windows para Linux; ejecuta una distro Linux (Ubuntu) dentro de Windows.
+- **Dónde y cómo se usa en mi proyecto:** `make`, `docker` y `git` se ejecutan desde la terminal de Ubuntu, con VS Code abierto en modo WSL.
+- **Por qué así:** `make` no existe en Windows, y los contenedores son Linux. Un solo entorno evita mezclar dos instalaciones de Git sobre la misma carpeta.
+- **Pregunta de defensa:** ¿por qué se ejecuta `make` en WSL y no directamente en Windows?
+
+### Docker Desktop y la integración con WSL
+- **Qué es:** Docker Desktop es la aplicación de Windows que ejecuta el motor de Docker. La integración con WSL hace que la distro (Ubuntu) pueda usar el comando `docker`.
+- **Dónde y cómo se usa en mi proyecto:** se activa en Docker Desktop → Settings → Resources → WSL integration. Si Docker Desktop no está arrancado, Ubuntu muestra `The command 'docker' could not be found in this WSL 2 distro`, y desde PowerShell `failed to connect to the docker API`.
+- **Por qué así:** el motor no corre dentro de Ubuntu, corre en Docker Desktop. **Antes de cualquier `docker` o `make`, comprueba que está arrancado.** Si sigue fallando, `wsl --shutdown` desde PowerShell y volver a abrir Docker Desktop y Ubuntu.
+- **Pregunta de defensa:** ¿qué compruebas primero si `docker` no se encuentra desde WSL?
+
+### NTFS (`/mnt/c`) y permisos
+- **Qué es:** el sistema de ficheros de Windows. Desde WSL la carpeta aparece en `/mnt/c/...` y no guarda los permisos de Linux.
+- **Dónde y cómo se usa en mi proyecto:** `core.filemode=false` en el repositorio, y `chmod 600` sobre `.env.dev` no surte efecto.
+- **Por qué así:** se documenta con honestidad en el README. La alternativa es mover el repositorio al sistema de ficheros de WSL (`~/proyectos/...`), donde `chmod` sí funciona.
+- **Pregunta de defensa:** ¿por qué `chmod 600` no funciona en tu carpeta y cómo lo solucionarías?
+
+---
+
+## 7. Automatización
+
+### Make y Makefile (pendiente de ver en el paso 1.6)
+- **Qué es:** `make` ejecuta "atajos" (*targets*) definidos en un `Makefile`. Cada línea de comando debe empezar con un **tabulador**.
+- **Para qué se usa:** convertir comandos largos en uno corto y reproducible.
+- **Dónde y cómo se usa en mi proyecto:** `make up-dev`, `make up-prod`, `make down` y `make clean`, que llaman a `docker compose` con el `-f`, el `--env-file` y el nombre de proyecto correctos.
+- **Por qué así:** lo exige el enunciado (Makefile o script). Evita mezclar dev y prod por error. `.PHONY` marca los targets que no son ficheros.
+- **Pregunta de defensa:** ¿qué hace `make up-dev` por debajo?
+
+---
+
+## 8. Aplicación y base de datos
+
+### PostgreSQL y `psql`
+- **Qué es:** PostgreSQL es la base de datos relacional. `psql` es su cliente de línea de comandos.
+- **Dónde y cómo se usa en mi proyecto:** servicio `db`. El "comando de prueba de conexión" del enunciado será un `psql` ejecutado **dentro** del contenedor, sin necesidad de publicar puerto. `pg_isready` es el healthcheck.
+- **Por qué así:** el cliente viene en la imagen, así que no instalas nada en tu máquina.
+- **Pregunta de defensa:** ¿cómo compruebas la conexión a la BD si no publica ningún puerto?
+
+### FastAPI y Uvicorn (pendiente de ver en el paso 1.3)
+- **Qué es:** FastAPI es el framework de la API; Uvicorn, el servidor que la ejecuta.
+- **Dónde y cómo se usa en mi proyecto:** el contenedor `web` sirve la API y el frontend estático (HTML/CSS/JS) en un único puerto, con `/status`.
+- **Por qué así:** un solo contenedor y un solo puerto publicado, y documentación interactiva en `/docs`.
+- **Pregunta de defensa:** ¿por qué la web y el frontend van en el mismo contenedor?
+
+### `/status`
+- **Qué es:** endpoint que consulta de forma real el estado de la BD y de la caché y lo devuelve en JSON.
+- **Dónde y cómo se usa en mi proyecto:** BD caída → `503`; caché caída → `200` con estado `degraded`; en dev la caché figura como "no aplica". La UI lo consulta periódicamente y el healthcheck de `web` lo usa.
+- **Por qué así:** la BD es imprescindible y la caché es opcional. Si el healthcheck de `web` fallara por la caché, el contenedor se marcaría `unhealthy` por un servicio no crítico.
+- **Pregunta de defensa:** ¿por qué la BD caída da 503 y la caché caída solo `degraded`?
+
+### Modelo *append-only* (pendiente de ver en el paso 2.1)
+- **Qué es:** los eventos solo se **añaden**, nunca se actualizan ni se borran.
+- **Dónde y cómo se usa en mi proyecto:** `encounters` es un registro de eventos (captura, fallo, muerte). El equipo activo no se guarda: se **deriva** de las capturas sin muerte posterior.
+- **Por qué así:** una muerte permanente no se revierte, así que es coherente con el dominio y con un registro inmutable.
+- **Pregunta de defensa:** ¿por qué registrar una muerte es un `INSERT` y no un `UPDATE`?
+
+---
+
+## 9. Caché
+
+### Redis y *cache-aside* (pendiente de ver en el paso 3.3)
+- **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.
+- **Dónde y cómo se usa en mi proyecto:** solo en prod (`cache`). Se cachea la lectura del equipo activo y se invalida al registrar un evento.
+- **Por qué así:** el enunciado exige demostrar su uso. La invalidación se hace **después del `COMMIT`**: si fuera antes, una lectura intermedia podría volver a cachear el estado antiguo. A esta escala el beneficio es sobre todo pedagógico.
+- **Pregunta de defensa:** ¿por qué se invalida la caché después del commit y no antes?
+
+### TTL (pendiente de ver en el paso 3.3)
+- **Qué es:** *time to live*: los segundos que un dato permanece en la caché antes de caducar.
+- **Dónde y cómo se usa en mi proyecto:** cada entrada del equipo activo lleva un TTL; la UI muestra el TTL restante.
+- **Por qué así:** actúa como red de seguridad si una invalidación falla: el dato antiguo desaparece solo.
+- **Pregunta de defensa:** ¿qué aporta el TTL si ya invalidas la caché al escribir?
+
+### Degradación elegante (pendiente de ver en el paso 3.3)
+- **Qué es:** si un servicio no crítico falla, la aplicación sigue funcionando con menos prestaciones.
+- **Dónde y cómo se usa en mi proyecto:** si Redis cae, la app consulta Postgres directamente y `/status` indica `degraded`.
+- **Por qué así:** la caché es opcional y la BD es imprescindible.
+- **Pregunta de defensa:** ¿qué pasa con la aplicación si cae Redis? ¿Y si cae Postgres?

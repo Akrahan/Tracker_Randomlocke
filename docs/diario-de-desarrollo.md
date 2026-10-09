@@ -66,3 +66,41 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: interpretar los errores, proponer un diagnóstico seguro y guiar la resolución del conflicto de rebase. Parte del trabajo: Fase 0, publicación del Paso 0.3.
 - **Commit:** `docs: log push rejection incident` (`d954c33` tras el rebase)
 
+
+### [Paso 1.1: variables de entorno de dev]
+- **Fecha:** 2026-10-09
+- **Archivos:** `.env.dev.example` (versionado); `.env.dev` (real, ignorado por Git, no versionado)
+- **Comandos:** `cp .env.dev.example .env.dev`, `openssl rand -base64 24` (generación de la contraseña), `chmod 600 .env.dev`, `ls -l .env.dev`, `git status --short`, `git check-ignore -v .env.dev`, `grep -n POSTGRES_PASSWORD .env.dev.example`, `git add .env.dev.example`, `git commit`, `git push`
+- **Variables definidas (solo nombres):** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DB_HOST`, `WEB_PORT`, `CACHE_ENABLED`.
+- **Qué se ha hecho y cómo:**
+  - La plantilla `.env.dev.example` lleva valores ficticios y documenta qué variables hay que definir. Se copió a `.env.dev`, donde la contraseña es real, aleatoria y exclusiva de este proyecto.
+  - `git check-ignore -v .env.dev` confirmó que el real se ignora (regla de `.gitignore` línea 3) y `git ls-files` que no está en el repositorio.
+- **Incidencia:** al preparar la plantilla se escribió en ella por error una contraseña real. Se detectó al revisar el fichero **antes** del primer `git add` (estaba sin seguir), se sustituyó por un valor ficticio y se generó una contraseña nueva para `.env.dev`. Nunca llegó al historial. Lección: borrar un secreto en un commit posterior no lo elimina del historial, por eso la revisión se hace antes de `add`.
+- **Limitación conocida:** `chmod 600` no tiene efecto porque el repositorio está en `/mnt/c` (NTFS): el fichero sigue como `-rwxrwxrwx`. Se documentará con honestidad en el README (§1.3c del plan). Alternativa pendiente de valorar: mover el repositorio al sistema de ficheros de WSL.
+- **Justificación:** el enunciado prohíbe credenciales hardcodeadas. El compose usará interpolación (`${POSTGRES_PASSWORD}`), de modo que el YAML contiene solo nombres de variables. Los `.env` reales se entregarán en el ZIP con credenciales exclusivas del proyecto (decisión 9); alternativa en un entorno real: Docker secrets o un gestor de secretos.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar la interpolación de variables, proponer la plantilla y revisar la versionada (sin leer `.env.dev`). Parte del trabajo: Fase 1, variables de entorno de dev.
+- **Commit:** `chore(env): add dev environment variables template` (`d64672b`)
+
+### [Paso 1.2: solo la base de datos]
+- **Fecha:** 2026-10-10
+- **Archivos:** `docker-compose.dev.yml`
+- **Comandos:** `docker compose --env-file .env.dev -f docker-compose.dev.yml config --quiet` (validación de sintaxis, con y sin `--env-file`), `alias dc='docker compose --env-file .env.dev -f docker-compose.dev.yml'`, `dc up -d db`, `dc ps`, `dc exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version();"'`, `docker ps --format "table {{.Names}}\t{{.Ports}}"`, `nc -zv localhost 5432`, `dc down`
+- **Qué se ha hecho y cómo:**
+  - Primer `docker-compose.dev.yml`, construido en tres piezas: (1) `name: randomlocke-dev` y el servicio `db` con la imagen `postgres:16`; (2) `environment` con `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}` y `${POSTGRES_DB}` y el volumen con nombre `pgdata` montado en `/var/lib/postgresql/data`, declarado al final del fichero; (3) `healthcheck` con `pg_isready`.
+  - Error corregido durante el paso: el bloque `healthcheck` se escribió fuera del servicio (sin la sangría que lo hace hijo de `db`). Se detecta con `config --quiet` y se arregla subiéndolo a 4 espacios dentro de `db`.
+  - Sin `--env-file`, `config` avisa de que las variables no están definidas; Compose solo lee `.env` automáticamente, no `.env.dev`.
+- **Verificación (observable):**
+  - `dc ps`: `randomlocke-dev-db-1` en estado `healthy`, columna PORTS `5432/tcp` (sin publicar).
+  - `psql` dentro del contenedor: `PostgreSQL 16.15`. Es el comando de prueba de conexión que exige el enunciado.
+  - `docker ps`: sin mapeo de puertos.
+  - `nc -zv localhost 5432`: `Connection refused`, es decir, `db` no es accesible desde fuera.
+- **Decisiones:**
+  - `environment` con interpolación, no `env_file`: cada servicio recibe solo las variables que necesita (mínimo privilegio).
+  - Volumen con nombre y no *bind mount*: en `/mnt/c` (NTFS) Postgres puede fallar por permisos.
+  - `$${...}` en el healthcheck para que las variables las resuelva la shell del contenedor y no Compose; `-U` y `-d` en `pg_isready` para evitar errores `role "root" does not exist` en los logs.
+  - Valores del healthcheck: `interval 10s`, `timeout 5s`, `retries 5`, `start_period 20s`.
+  - No se publica ningún puerto en `db`; se comprueba con `exec` en lugar de conectar desde el host.
+  - `config` solo con `--quiet`: sin esa opción imprimiría la contraseña ya resuelta.
+- **Justificación:** la base de datos es el servicio imprescindible de la arquitectura y se valida aislada antes de añadir la web. El volumen cubre la persistencia del enunciado, el healthcheck permite que `web` espere a `db` (paso 1.4) y la ausencia de `ports` cumple que solo `web` se publique.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar los conceptos, dar el compose por piezas, revisar el fichero escrito por el alumno y corregir la sangría del healthcheck. Parte del trabajo: Fase 1, servicio `db` de dev.
+- **Commit:** `feat(dev): add PostgreSQL service with persistent volume and healthcheck`

@@ -104,3 +104,34 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** la base de datos es el servicio imprescindible de la arquitectura y se valida aislada antes de añadir la web. El volumen cubre la persistencia del enunciado, el healthcheck permite que `web` espere a `db` (paso 1.4) y la ausencia de `ports` cumple que solo `web` se publique.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar los conceptos, dar el compose por piezas, revisar el fichero escrito por el alumno y corregir la sangría del healthcheck. Parte del trabajo: Fase 1, servicio `db` de dev.
 - **Commit:** `feat(dev): add PostgreSQL service with persistent volume and healthcheck`
+
+### [Decisión fuera de paso: alineación con el temario y rama en la Fase 2]
+- **Fecha:** 2026-10-10
+- **Archivos:** ninguno (revisión de documentación)
+- **Qué se hizo:** se compararon los Temas 3 (Git), 4 (Arquitecturas Cloud) y 5 (Contenedores) de la asignatura con el plan. Solo se pudo leer el texto de los PDF (las páginas que son imágenes del Tema 5 quedaron sin leer) y el Tema 4 solo por palabras clave. El plan sigue el enunciado y cubre las buenas prácticas del Tema 5; no se cambia ninguna decisión cerrada.
+- **Decisiones:** (1) la funcionalidad opcional de la Fase 2, si se llega, se hará en una **rama** y se fusionará en `main`, para practicar el concepto de Git del Tema 3 que aún no se ha usado. (2) Trivy queda como mejora opcional de la Fase 4, pendiente de decidir. (3) Para la defensa, el proyecto se describe como un monolito con servicios de apoyo (web + BD + caché), no como microservicios.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: contrastar el plan con el temario y explicar monolito, microservicios y Trivy. Parte del trabajo: revisión de alineación del proyecto.
+- **Commit:** se incluirá con el commit del Paso 1.3.
+
+### [Paso 1.3: imagen de la web con una app mínima]
+- **Fecha:** 2026-10-10
+- **Archivos:** `app/requirements.txt`, `app/main.py`, `app/.dockerignore`, `app/Dockerfile`
+- **Comandos:** `docker run --rm python:3.12-slim pip index versions fastapi` (y `uvicorn`), `docker run --rm -v "$PWD/app":/app python:3.12-slim pip install --dry-run -r /app/requirements.txt`, `docker run --rm -v "$PWD/app":/app python:3.12-slim python -m py_compile /app/main.py`, `docker build -t randomlocke-web:test ./app` (dos veces), `docker run --rm randomlocke-web:test whoami`, `docker run --rm -d -p 8000:8000 --name web-test randomlocke-web:test`, `curl -i http://localhost:8000/`, `docker exec web-test whoami`, `docker stop web-test`
+- **Qué se ha hecho y cómo:**
+  - `requirements.txt` con `fastapi==0.143.0` y `uvicorn==0.54.0`, versiones consultadas con `pip index versions` dentro de una imagen `python:3.12-slim` y validadas con `pip install --dry-run`, sin instalar nada en el equipo.
+  - `main.py`: aplicación FastAPI con un único endpoint `GET /` que devuelve un JSON. Todavía no usa la BD (paso 1.4).
+  - `.dockerignore` (en `app/`, que es el contexto de build): excluye cachés de Python, entornos virtuales, `.env` y `.env.*`, metadatos de Git y de VS Code, y el propio `Dockerfile`.
+  - `Dockerfile`: base `python:3.12-slim`; `ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1`; `WORKDIR /app`; `requirements.txt` copiado e instalado **antes** que el código (capa de dependencias propia, `--no-cache-dir`); usuario `appuser` (sistema, sin home, sin shell, UID 10001); `COPY . .`; `USER appuser`; `EXPOSE 8000`; `CMD` en forma *exec* con Uvicorn en `0.0.0.0:8000`.
+- **Verificación (observable):**
+  - Construcción: 5,7 s la primera vez y 0,3 s la segunda, con las tres capas iniciales en `CACHED`.
+  - `whoami` devuelve `appuser` con `docker run` y con `docker exec`, es decir, el proceso no corre como root.
+  - `curl -i http://localhost:8000/` devuelve `HTTP/1.1 200 OK` y `{"mensaje":"Tracker Randomlocke funcionando"}`.
+- **Decisiones:**
+  - `slim` y no `alpine` para Python, para evitar problemas de compatibilidad de paquetes; solo se fijan las dependencias directas.
+  - El código se copia sin `--chown`: pertenece a `root` y `appuser` solo puede leerlo, de modo que la app no puede modificar su propio código.
+  - `CMD` en forma *exec* (Uvicorn recibe las señales de parada) y `--host 0.0.0.0` (con `127.0.0.1` el puerto publicado no llegaría a la app).
+  - `HEALTHCHECK` no va en el `Dockerfile`: se define en el compose (paso 1.5). Una sola etapa de build: un *multi-stage* no aporta nada con dependencias sin compilar.
+- **Tropiezos:** (1) `requirements.txt` creado por error en `app/static/` (carpeta pública) en vez de `app/`; se detectó porque la verificación no lo encontraba. (2) `Dockerfile` creado como carpeta vacía en lugar de fichero; se detectó con `ls` y se corrigió. (3) Un `curl` lanzado justo tras `docker run -d` no devolvió nada: Uvicorn aún no escuchaba; con una espera de 3 s respondió `200`. (4) La extensión EditorConfig no estaba aplicándose: faltaba el salto de línea final en `main.py`.
+- **Justificación:** la web es el único servicio que publicará puerto, así que su imagen debe ser reproducible (versiones fijas), pequeña, sin secretos y sin privilegios. La capa de dependencias aparte hace que reconstruir tras un cambio de código sea casi instantáneo.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar el Dockerfile por piezas, dar el código en trozos, comprobar los ficheros escritos por el alumno y detectar los errores de ubicación y de tipo. Parte del trabajo: Fase 1, imagen de la web.
+- **Commit:** `feat(web): add FastAPI base image with non-root user`

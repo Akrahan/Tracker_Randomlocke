@@ -41,16 +41,48 @@ Los valores que aparecen son siempre ficticios.
 - **Por qué así:** el código cambia constantemente y las dependencias casi nunca.
 - **Pregunta de defensa:** ¿por qué se copia `requirements.txt` antes que el resto del código?
 
+### `CMD` en forma *exec*, `EXPOSE` y `--host 0.0.0.0` (paso 1.3)
+- **Qué es:** `CMD ["uvicorn", "main:app", ...]` (forma *exec*, con lista) ejecuta Uvicorn directamente como proceso principal del contenedor; la forma *shell* (`CMD uvicorn ...`) lo lanzaría a través de `/bin/sh`. `EXPOSE 8000` solo documenta el puerto. `main:app` significa "el objeto `app` del fichero `main.py`".
+- **Dónde y cómo se usa en mi proyecto:** al final de `app/Dockerfile`. Uvicorn arranca con `--host 0.0.0.0` y `--port 8000`.
+- **Por qué así:** con la forma *exec*, Uvicorn recibe directamente las señales de parada (`docker stop` lo cierra limpiamente); con la forma *shell* las recibiría `sh`. `0.0.0.0` es imprescindible en un contenedor: con `127.0.0.1` la app solo sería accesible desde dentro y el puerto publicado no funcionaría. El puerto del host lo decide `WEB_PORT` del `.env`; dentro del contenedor es siempre 8000.
+- **Pregunta de defensa:** ¿qué pasa con el puerto publicado si Uvicorn escucha en `127.0.0.1` dentro del contenedor?
+
+### Contexto de build y `.dockerignore` (paso 1.3)
+- **Qué es:** al construir una imagen, Docker envía al motor una carpeta, el **contexto de build**, y el `Dockerfile` solo puede copiar ficheros de ahí. `.dockerignore` indica qué no enviar, igual que `.gitignore` con Git.
+- **Para qué se usa:** seguridad (que un `COPY . .` no meta `.env`, `.git` o claves dentro de una imagen que podría compartirse), velocidad y tamaño.
+- **Dónde y cómo se usa en mi proyecto:** `app/.dockerignore`, porque el contexto de la web es `app/` (`build: ./app` en el compose). Excluye cachés de Python, entornos virtuales, `.env` y `.env.*`, metadatos de Git y de VS Code, y el propio `Dockerfile`.
+- **Por qué así:** a diferencia del `.gitignore`, aquí sí se ignora `.env.*` entero: la imagen no necesita ninguna plantilla ni valor. Debe estar en la raíz del contexto, no del proyecto.
+- **Pregunta de defensa:** ¿por qué es peligroso un `COPY . .` sin `.dockerignore`?
+
+### Instrucciones del Dockerfile: `FROM`, `ENV`, `WORKDIR`, `COPY`, `RUN` (paso 1.3)
+- **Qué es:** el `Dockerfile` es la receta de la imagen; cada instrucción crea una capa. `FROM` elige la imagen base; `ENV` fija variables de entorno; `WORKDIR` fija la carpeta de trabajo; `COPY` copia ficheros del contexto a la imagen; `RUN` ejecuta un comando durante la construcción.
+- **Dónde y cómo se usa en mi proyecto:** `app/Dockerfile` parte de `python:3.12-slim`, trabaja en `/app`, copia `requirements.txt` y ejecuta `pip install --no-cache-dir -r requirements.txt` **antes** de copiar el código. `PYTHONDONTWRITEBYTECODE=1` evita crear `.pyc` dentro del contenedor y `PYTHONUNBUFFERED=1` hace que los logs salgan al instante en `docker compose logs`.
+- **Por qué así:** el orden aprovecha la caché de capas: si solo cambia `main.py`, la capa de dependencias se reutiliza y no se reinstala nada. `--no-cache-dir` evita guardar en la imagen la caché de pip, que no sirve para nada ahí.
+- **Cómo leer la salida de `docker build`:** cada instrucción aparece como un paso (`[2/4] WORKDIR /app`...). Si no ha cambiado nada, el paso aparece como `CACHED`. En el proyecto, la primera construcción tardó unos 6 s (instalar FastAPI y Uvicorn) y la segunda 0,3 s con `CACHED` en los tres pasos: es la caché de capas funcionando.
+- **Error típico:** el `Dockerfile` es un **fichero** de texto sin extensión, con ese nombre exacto (D mayúscula, sin `.txt`). Caso real: se creó por error como una carpeta vacía, y Docker no encontraba la receta. Se comprueba con `ls -l`: una línea que empieza por `-` es un fichero y por `d` una carpeta.
+- **Pregunta de defensa:** ¿por qué se copia `requirements.txt` y se instala antes de copiar el resto del código?
+
+### Preguntas del temario (Tema 5) sobre el Dockerfile
+Conceptos que el temario de la asignatura plantea y que conviene saber explicar, aunque el proyecto no los use todos.
+- **`COPY` frente a `ADD`:** ambos copian ficheros a la imagen. `ADD` además descomprime archivos `.tar` y admite URLs, lo que lo hace menos predecible. Se prefiere `COPY`, que es el que usa el proyecto.
+- **`CMD` frente a `ENTRYPOINT`:** `ENTRYPOINT` define el ejecutable fijo del contenedor y `CMD` sus argumentos por defecto, que se pueden sobrescribir al hacer `docker run`. Si se combinan, `CMD` aporta los argumentos de `ENTRYPOINT`. El proyecto usa solo `CMD` para arrancar Uvicorn.
+- **`EXPOSE`:** solo **documenta** el puerto en el que escucha la aplicación; no lo publica. Publicar es `ports:` en el compose.
+- ***Multi-stage build*:** construir en una etapa con herramientas pesadas (compiladores...) y copiar solo el resultado a una imagen final ligera. Reduce tamaño y superficie de ataque. En este proyecto no hace falta: `python:3.12-slim` instala dependencias puras sin compilar, así que una sola etapa es más simple.
+- **`HEALTHCHECK` en el Dockerfile:** el enunciado permite definirlo en el compose o en el Dockerfile. El proyecto lo define en el compose.
+- **Análisis de imágenes (Trivy, Grype):** herramientas que buscan vulnerabilidades conocidas en las dependencias de una imagen. Mejora opcional del proyecto, no obligatoria.
+- **Tipos de red de Docker:** *bridge* (la de Compose por defecto: contenedores aislados que se hablan entre sí), *host* (usa la red del host y pierde el aislamiento) y *overlay* (varios hosts, para Swarm o Kubernetes). El proyecto usa *bridge*.
+- **Pregunta de defensa:** ¿por qué se prefiere `COPY` a `ADD`, y por qué no hace falta un *multi-stage build* en esta práctica?
+
 ### `slim` frente a `alpine` (pendiente de ver en el paso 1.3)
 - **Qué es:** variantes reducidas de una imagen base. `slim` es Debian recortado; `alpine` usa otra librería de C (musl) y es aún más pequeña.
 - **Dónde y cómo se usa en mi proyecto:** `python:3.12-slim` para `web`; `redis:7-alpine` para `cache`.
 - **Por qué así:** con Python, `slim` evita problemas de compatibilidad de paquetes compilados que a veces da `alpine`. Redis no tiene ese problema, y ahí `alpine` ahorra tamaño.
 - **Pregunta de defensa:** ¿por qué `slim` para Python y `alpine` para Redis?
 
-### Usuario no root (pendiente de ver en el paso 1.3)
+### Usuario no root (paso 1.3)
 - **Qué es:** por defecto, el proceso de un contenedor corre como `root`. Un usuario no root tiene permisos limitados.
 - **Para qué se usa:** reducir el daño si alguien consigue ejecutar código dentro del contenedor.
-- **Dónde y cómo se usa en mi proyecto:** el `Dockerfile` de `web` crea un usuario sin privilegios y ejecuta la aplicación con él.
+- **Dónde y cómo se usa en mi proyecto:** el `Dockerfile` de `web` crea el usuario `appuser` con `useradd --system --no-create-home --uid 10001 --shell /usr/sbin/nologin appuser` (usuario de sistema, sin carpeta personal, sin shell de inicio de sesión y con un UID alto y fijo) y cambia a él con `USER appuser` antes del arranque. El código se copia **sin** `--chown`, así que pertenece a `root` y `appuser` solo puede leerlo: la aplicación no puede modificar su propio código. Se comprueba con `docker run --rm <imagen> whoami`.
 - **Por qué así:** es una medida básica de seguridad que el enunciado recomienda.
 - **Pregunta de defensa:** ¿qué ventaja de seguridad aporta no ejecutar como root?
 
@@ -189,6 +221,7 @@ Los valores que aparecen son siempre ficticios.
 - **Qué es:** indica que un servicio espera a otro. Sin condición, solo ordena el **arranque**; con `service_healthy`, espera a que esté **listo**.
 - **Dónde y cómo se usa en mi proyecto:** `web` espera a que `db` esté `healthy`.
 - **Por qué así:** si solo ordenara el arranque y Postgres tardara 10 segundos en aceptar conexiones, `web` fallaría al conectar.
+- **Caso real del proyecto:** al probar la imagen de `web`, un `curl` lanzado justo después de `docker run -d` no devolvió nada, y 3 segundos después respondió `200 OK`. Que un contenedor esté arrancado no significa que el servicio ya esté escuchando; es exactamente lo que resuelve un healthcheck.
 - **Pregunta de defensa:** si `depends_on` solo ordenara el arranque, ¿qué le pasaría a `web` con una BD lenta?
 
 ### Puertos publicados (`ports`)
@@ -204,6 +237,24 @@ Los valores que aparecen son siempre ficticios.
 - **Pregunta de defensa:** ¿por qué `web` necesita estar en dos redes?
 
 ---
+
+### Arquitectura del proyecto: aplicación multicontenedor, no microservicios
+- **Qué es:** en una arquitectura de **microservicios** la lógica de negocio se divide en servicios independientes (cada uno con su código, despliegue y a veces su BD) que se comunican por API. Un **monolito** concentra esa lógica en una sola aplicación. Una aplicación **multicontenedor** puede ser cualquiera de las dos: tener varios contenedores no basta para ser microservicios.
+- **Dónde y cómo se usa en mi proyecto:** `web` contiene toda la lógica (un único servicio); `db` (PostgreSQL) y `cache` (Redis) son software de terceros que `web` usa como servicios de apoyo.
+- **Por qué así:** es un monolito desplegado con servicios de apoyo (arquitectura en capas), suficiente para el alcance. Aun así comparte ideas con microservicios: servicios desacoplados por red, comunicación por nombre, fallos independientes y degradación si la caché cae.
+- **Pregunta de defensa:** ¿tu práctica es una arquitectura de microservicios? Respuesta corta: no; es un monolito con servicios de apoyo, porque la lógica de negocio no está dividida.
+
+### Trivy: análisis de vulnerabilidades (mejora opcional, Fase 4)
+- **Qué es:** un escáner de seguridad de código abierto que compara los paquetes del sistema y las librerías de una imagen con bases de datos de vulnerabilidades conocidas (CVE). También detecta secretos olvidados y errores de configuración.
+- **Dónde y cómo se usaría en mi proyecto:** sobre la imagen de `web` (por ejemplo `docker run --rm aquasec/trivy image <imagen>`) y en la revisión de seguridad del paso 4.1, con los resultados guardados en `docs/pruebas.md`.
+- **Por qué así:** el Tema 5 lo cita como buena práctica. Solo detecta fallos **ya conocidos**, y muchos de la imagen base no tienen arreglo todavía. Dar acceso al socket de Docker a su contenedor le concede control sobre Docker; la alternativa es escanear la imagen exportada con `docker save`.
+- **Pregunta de defensa:** ¿qué hace Trivy y qué no puede garantizar?
+
+### Ramas y *merge* (se practicará en la Fase 2 opcional)
+- **Qué es:** una rama es una línea de desarrollo independiente; `merge` la integra en otra. Permite trabajar en una funcionalidad sin tocar `main` hasta que esté lista.
+- **Dónde y cómo se usará en mi proyecto:** la funcionalidad opcional de la Fase 2 se hará en una rama (por ejemplo `feat/...`) y se fusionará en `main` al terminar. Hasta ahora todo el trabajo ha sido directo en `main`.
+- **Por qué así:** es el concepto de Git del Tema 3 que aún no se ha practicado; hacerlo con un caso real sirve para la defensa.
+- **Pregunta de defensa:** ¿qué ventaja tiene trabajar en una rama frente a hacerlo directamente en `main`?
 
 ## 5. Git y repositorio
 
@@ -298,6 +349,25 @@ Los valores que aparecen son siempre ficticios.
 - **Dónde y cómo se usa en mi proyecto:** el contenedor `web` sirve la API y el frontend estático (HTML/CSS/JS) en un único puerto, con `/status`.
 - **Por qué así:** un solo contenedor y un solo puerto publicado, y documentación interactiva en `/docs`.
 - **Pregunta de defensa:** ¿por qué la web y el frontend van en el mismo contenedor?
+
+### `requirements.txt` y versiones fijas (paso 1.3)
+- **Qué es:** el fichero donde Python lista las librerías que necesita el proyecto. `fastapi==0.143.0` fija la versión exacta; `fastapi` a secas instalaría siempre la más reciente.
+- **Para qué se usa:** que `pip install -r requirements.txt` instale lo mismo hoy y dentro de un mes.
+- **Dónde y cómo se usa en mi proyecto:** `app/requirements.txt`, que el `Dockerfile` copia e instala en una capa propia. Contiene `fastapi` y `uvicorn`; `psycopg` (paso 1.4) y `redis` (paso 3.3) se añadirán cuando se necesiten. Las versiones se consultaron con `pip index versions <paquete>` dentro de una imagen `python:3.12-slim`, sin instalar nada en el equipo.
+- **Por qué así:** sin versiones fijas, una actualización ajena podría romper la imagen sin tocar tu código. Solo se fijan las dependencias **directas**; las que arrastran (Starlette, Pydantic...) las elige pip. La alternativa más estricta es fijar también las transitivas con `pip freeze` o un fichero de bloqueo, a costa de más mantenimiento.
+- **Pregunta de defensa:** ¿por qué fijar versiones en `requirements.txt` si siempre se puede instalar la última?
+
+### Estructura de `app/` y la carpeta pública `static/` (paso 1.3)
+- **Qué es:** `app/` contiene todo lo que forma parte de la imagen de `web`. Dentro, `static/` es la carpeta que la API **servirá al navegador**: lo que haya ahí es accesible públicamente.
+- **Dónde y cómo se usa en mi proyecto:** `app/requirements.txt`, `app/main.py`, `app/Dockerfile` y `app/.dockerignore` van en la raíz de `app/`; solo HTML, CSS y JS van en `app/static/`.
+- **Por qué así:** un `requirements.txt` dentro de `static/` quedaría descargable por cualquiera que visite la web, además de que el `Dockerfile` no lo encontraría al copiarlo. Caso real: el fichero se creó por error en `app/static/` y se detectó al fallar la verificación.
+- **Pregunta de defensa:** ¿por qué no se pueden mezclar los ficheros de la aplicación con los que sirve la carpeta estática?
+
+### Verificar sin instalar: `pip install --dry-run` y `docker run --rm -v` (paso 1.3)
+- **Qué es:** `--dry-run` simula la instalación y lista lo que instalaría, sin hacerlo. `docker run --rm` crea un contenedor temporal que se borra al terminar. `-v "$PWD/app":/app` monta tu carpeta `app/` dentro de él.
+- **Dónde y cómo se usa en mi proyecto:** para comprobar que las versiones de `requirements.txt` existen y son compatibles, sin instalar Python ni librerías en el equipo.
+- **Por qué así:** se prueba en el mismo entorno (`python:3.12-slim`) que usará la imagen. Aquí el *bind mount* es de solo lectura puntual, así que no tiene el problema de permisos de NTFS que sí tendría con la base de datos.
+- **Pregunta de defensa:** ¿qué significan `--rm` y `-v` en un `docker run`?
 
 ### `/status`
 - **Qué es:** endpoint que consulta de forma real el estado de la BD y de la caché y lo devuelve en JSON.

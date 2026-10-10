@@ -183,3 +183,24 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige healthcheck en todos los contenedores y que su estado se refleje en la aplicación; `web` deriva su salud de `/status`, que consulta la BD de forma real, de modo que el estado de salud del contenedor refleja el de sus dependencias.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: comparar las opciones de healthcheck, dar el bloque y revisar el compose del alumno. Parte del trabajo: Fase 1, healthcheck de la web.
 - **Commit:** `feat(web): add healthcheck to web container`
+
+### [Paso 1.6: Makefile mínimo]
+- **Fecha:** 2026-10-10
+- **Archivos:** `Makefile` (en la raíz del proyecto)
+- **Comandos:** `cat -A Makefile` (comprobar tabuladores), `make -n up-dev` y `make -n down ps logs` (ensayo en seco), `make down`, `docker volume ls | grep pgdata`, `make up-dev`, `make ps`, `curl -s -w "\nHTTP %{http_code}\n" http://localhost:8000/status`
+- **Qué se ha hecho y cómo:**
+  - Variable `COMPOSE_DEV = docker compose --env-file .env.dev -f docker-compose.dev.yml` con el comando base escrito una sola vez, y los targets `build`, `up-dev` (`up -d --build`), `down`, `ps` y `logs` (`logs -f --tail=50`), todos declarados en `.PHONY`. Sustituye al `alias dc`, que se perdía al cerrar la terminal.
+  - El nombre de proyecto lo fija `name: randomlocke-dev` dentro del compose, así que no se repite con `-p`.
+- **Verificación (observable), desde cero:**
+  - `make down` y después `docker volume ls | grep pgdata`: sigue existiendo `randomlocke-dev_pgdata` (decisión 8: `down` conserva los datos).
+  - `make up-dev` y `make ps`: `db` `Up (healthy)` (`5432/tcp`, sin publicar) y `web` `Up (healthy)` (`0.0.0.0:8000->8000/tcp`).
+  - `curl` a `/status`: `{"db":"ok"}` con `HTTP 200`.
+- **Decisiones:**
+  - `make down` no borra volúmenes; el borrado de datos irá en `make clean` (paso 3.4).
+  - El `Makefile` va en la raíz y no en `app/`: orquesta todo el proyecto y sus rutas (`-f docker-compose.dev.yml`, `--env-file .env.dev`) son relativas a la raíz. `Dockerfile`, `main.py` y `requirements.txt` sí van en `app/`, porque forman parte de la imagen de `web`.
+- **Tropiezos:** (1) el `Makefile` quedó en algún momento sin la receta de `up-dev` (el target existía pero sin comando) y `make -n up-dev` dijo `Nothing to be done for 'up-dev'`; se detectó con `cat -A` y `make -n` y se añadió la línea con tabulador. (2) Duda inicial sobre su ubicación (raíz, no `app/`).
+- **Justificación:** el enunciado exige automatizar construir, levantar y detener el entorno. Un único sitio con el comando evita olvidar el `--env-file` o mezclar entornos, y hace el despliegue reproducible con `make up-dev`.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar `make`, `.PHONY` y el tabulador, dar el Makefile por piezas, revisarlo con `cat -A` y `make -n` y detectar la receta ausente. Parte del trabajo: Fase 1, automatización de dev.
+- **Commit:** `build: add Makefile with build, up-dev, down, ps and logs targets`
+
+> **Puerta A (esqueleto andante) cumplida:** dev levanta con un solo comando (`make up-dev`), solo `web` publica puerto, `/status` refleja la BD en tiempo real y todos los contenedores quedan `healthy`. Etiqueta sugerida: `v0.1-esqueleto`.

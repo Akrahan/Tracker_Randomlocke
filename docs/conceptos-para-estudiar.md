@@ -34,7 +34,7 @@ Los valores que aparecen son siempre ficticios.
 - **Por qué así:** el contenedor es **desechable**: al borrarlo, lo que había dentro desaparece. De ahí que los datos vivan en un volumen.
 - **Pregunta de defensa:** ¿qué diferencia hay entre una imagen y un contenedor?
 
-### Capas y caché de build (pendiente de ver en el paso 1.3)
+### Capas y caché de build (paso 1.3)
 - **Qué es:** una imagen se construye con una capa por cada instrucción del `Dockerfile`. Docker reutiliza las capas que no han cambiado.
 - **Para qué se usa:** que reconstruir la imagen sea rápido.
 - **Dónde y cómo se usa en mi proyecto:** en el `Dockerfile` de `web`, las dependencias (`requirements.txt`) se instalan en una capa propia **antes** de copiar el código. Si solo cambia el código, no se reinstalan las dependencias.
@@ -73,7 +73,7 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Tipos de red de Docker:** *bridge* (la de Compose por defecto: contenedores aislados que se hablan entre sí), *host* (usa la red del host y pierde el aislamiento) y *overlay* (varios hosts, para Swarm o Kubernetes). El proyecto usa *bridge*.
 - **Pregunta de defensa:** ¿por qué se prefiere `COPY` a `ADD`, y por qué no hace falta un *multi-stage build* en esta práctica?
 
-### `slim` frente a `alpine` (pendiente de ver en el paso 1.3)
+### `slim` frente a `alpine` (paso 1.3)
 - **Qué es:** variantes reducidas de una imagen base. `slim` es Debian recortado; `alpine` usa otra librería de C (musl) y es aún más pequeña.
 - **Dónde y cómo se usa en mi proyecto:** `python:3.12-slim` para `web`; `redis:7-alpine` para `cache`.
 - **Por qué así:** con Python, `slim` evita problemas de compatibilidad de paquetes compilados que a veces da `alpine`. Redis no tiene ese problema, y ahí `alpine` ahorra tamaño.
@@ -341,12 +341,17 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 
 ## 7. Automatización
 
-### Make y Makefile (pendiente de ver en el paso 1.6)
+### Make y Makefile (paso 1.6)
 - **Qué es:** `make` ejecuta "atajos" (*targets*) definidos en un `Makefile`. Cada línea de comando debe empezar con un **tabulador**.
 - **Para qué se usa:** convertir comandos largos en uno corto y reproducible.
-- **Dónde y cómo se usa en mi proyecto:** `make up-dev`, `make up-prod`, `make down` y `make clean`, que llaman a `docker compose` con el `-f`, el `--env-file` y el nombre de proyecto correctos.
-- **Por qué así:** lo exige el enunciado (Makefile o script). Evita mezclar dev y prod por error. `.PHONY` marca los targets que no son ficheros.
-- **Pregunta de defensa:** ¿qué hace `make up-dev` por debajo?
+- **Dónde y cómo se usa en mi proyecto:** `make build`, `make up-dev`, `make down`, `make ps` y `make logs` (y más adelante `make up-prod` y `make clean`). Una variable `COMPOSE_DEV = docker compose --env-file .env.dev -f docker-compose.dev.yml` guarda el comando base una sola vez y los targets la usan con `$(COMPOSE_DEV)`. Sustituye al `alias dc`, que se pierde al cerrar la terminal.
+- **Por qué así:** lo exige el enunciado (Makefile o script). Un único sitio con el comando evita olvidar el `--env-file` o mezclar dev con prod. El nombre de proyecto ya lo fija `name:` en el compose, así que no se repite con `-p`.
+- **`.PHONY`:** marca los targets que son acciones y no ficheros. Sin él, si existiera un fichero llamado `build`, `make build` diría que ya está hecho y no ejecutaría nada.
+- **El tabulador:** si las líneas de comando empiezan con espacios, `make` falla con `*** missing separator. Stop.`. `.editorconfig` fuerza tabuladores en `[Makefile]`, pero solo si la extensión EditorConfig está activa. Se comprueba con `cat -A Makefile` (los tabuladores salen como `^I`).
+- **`down` frente a `clean` (decisión 8):** `make down` ejecuta `docker compose down`, que para y elimina contenedores y red pero **conserva los volúmenes**, así que los datos de la BD sobreviven. `make clean` (paso 3.4) añadirá `-v` para borrarlos también. Se comprueba con `docker volume ls | grep pgdata` tras un `make down`: el volumen sigue ahí.
+- **`make logs`:** usa `logs -f --tail=50`: sigue los logs en directo empezando por las últimas 50 líneas. Se queda esperando; se sale con Ctrl+C.
+- **Ensayo en seco:** `make -n up-dev` imprime el comando que ejecutaría sin ejecutarlo; es la forma segura de comprobar un Makefile.
+- **Pregunta de defensa:** ¿qué hace `make up-dev` por debajo, y por qué el Makefile exige tabuladores?
 
 ---
 
@@ -384,7 +389,7 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** cada comprobación empieza de cero, así que nunca hay una conexión caducada tras reiniciarse la BD: el estado se **recupera solo**. Es la opción más simple y correcta para un endpoint de salud. A mayor escala se usaría un *pool* (`psycopg_pool`), que reutiliza conexiones pero necesita gestionar las caídas. El `connect_timeout` evita que `/status` se quede colgado si la BD no responde.
 - **Pregunta de defensa:** ¿por qué `/status` no reutiliza una conexión abierta?
 
-### FastAPI y Uvicorn (pendiente de ver en el paso 1.3)
+### FastAPI y Uvicorn (pasos 1.3 y 1.4)
 - **Qué es:** FastAPI es el framework de la API; Uvicorn, el servidor que la ejecuta.
 - **Dónde y cómo se usa en mi proyecto:** el contenedor `web` sirve la API y el frontend estático (HTML/CSS/JS) en un único puerto, con `/status`.
 - **Por qué así:** un solo contenedor y un solo puerto publicado, y documentación interactiva en `/docs`.

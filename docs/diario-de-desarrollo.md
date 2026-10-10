@@ -228,3 +228,50 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige que la BD se inicialice automáticamente o al arrancar la aplicación. Hacerlo desde la web, de forma idempotente, mantiene el esquema sincronizado con el código sin perder datos y funciona igual con volúmenes nuevos o ya llenos.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar la decisión 5 y el modelo de datos, dar el SQL y el código en piezas, y ejecutar a petición del alumno la prueba de borrado y recreación de tablas en la BD de desarrollo (vacía). Parte del trabajo: Fase 2, esquema e inicialización.
 - **Commit:** `feat(db): add runs/encounters schema with idempotent init on startup`
+
+### [Decisión fuera de paso: reglas configurables por partida, anotadas como opción de la Fase 4]
+- **Fecha:** 2026-10-11
+- **Archivos:** ninguno (decisión de alcance)
+- **Qué se propuso:** que al crear una partida el jugador pueda elegir las reglas de esa run (prohibir objetos curativos, cláusula de especies, vidas por Pokémon, etc.), porque cada comunidad juega el Nuzlocke a su manera.
+- **Decisión:** se **anota como opción** para la funcionalidad opcional de la Fase 2 del documento de diseño (Fase 4 de la hoja de ruta, 14-15 oct), a decidir si el MVP se cierra a tiempo. Generaliza la opción «validador de reglas de la run» y se haría en una **rama** (practicar el concepto del Tema 3). El MVP sigue con las reglas fijas del plan. No cambia ninguna decisión cerrada.
+- **Diseño previsto:** columna `rules JSONB` en `runs`, añadida con `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` en `schema.sql` (ejemplo práctico de la decisión 5 B). Reglas *comprobables* (primer encuentro, cláusula de especies) con `409`; reglas *de honor* (objetos curativos, nivel máximo) solo informativas; «vidas por Pokémon» queda fuera por cambiar el modelo (distinguir debilitado de muerto).
+- **Ajuste inmediato en el MVP:** el paso 2.2 no crea el índice único `uq_encounters_muerte`; la regla «una sola muerte por ruta» se comprueba solo en la API, para no atar el esquema a una regla que podría ser configurable. Se mantiene `uq_encounters_primer_encuentro`.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: clasificar las reglas según se puedan comprobar y valorar el impacto en el modelo y el calendario. Parte del trabajo: alcance de la Fase 2 opcional.
+- **Commit:** se incluirá con el commit del paso 2.2.
+
+### [Paso 2.2: endpoints del MVP]
+- **Fecha:** 2026-10-11
+- **Archivos:** `app/main.py` (endpoints), `app/schema.sql` (índice `uq_encounters_primer_encuentro`)
+- **Comandos:** `make up-dev` / `docker compose ... up -d --build`, `curl -s -w "\nHTTP %{http_code}\n" -X POST http://localhost:8000/runs ...`, `curl ... POST /runs/1/events ...` (varios casos), `curl -s http://localhost:8000/runs/1/team`, `curl -s http://localhost:8000/runs/1/graveyard`, `psql ... "\d encounters"` y `SELECT ... FROM encounters`. Varias pruebas las ejecutó la IA a petición del alumno, siempre sobre la BD de desarrollo.
+- **Qué se ha hecho y cómo:**
+  - `POST /runs` (201, `RETURNING`), con modelo Pydantic `RunNueva` (`min_length=1`, `max_length=100`, espacios recortados).
+  - `POST /runs/{id}/events` con `EventoNuevo` (`event_type` ∈ {`captura`, `fallo`, `muerte`} con `Literal`): `404` si la partida no existe, `409` ante un segundo resultado de primer encuentro en la ruta, una muerte sin captura previa o una segunda muerte, y `409` también si salta el índice único (`UniqueViolation`).
+  - `GET /runs/{id}/team` (capturas sin muerte en su ruta, con `NOT EXISTS`) y `GET /runs/{id}/graveyard` (capturas con muerte en su ruta, con *self join*; la especie sale de la captura).
+  - `conectar()` con `row_factory=dict_row`; `existe_run()` compartida por los tres endpoints.
+  - Todas las consultas están parametrizadas (`%s`).
+- **Verificación (observable):**
+  - Inyección SQL: crear una partida con el nombre `x'; DROP TABLE runs; --` devuelve `201` y se guarda como texto; `runs` sigue existiendo. Nombre vacío → `422`.
+  - Reglas: captura en Ruta 1 → `201`; segunda captura → `409`; fallo en Ruta 2 → `201`; muerte en Ruta 2 sin captura → `409`; tipo `huida` → `422`; partida 999 → `404`.
+  - Índice único: un `INSERT` directo de un segundo primer encuentro en Ruta 1 falla con `duplicate key value violates unique constraint "uq_encounters_primer_encuentro"`.
+  - **Prueba del plan:** antes de la muerte, el equipo contiene Charmander (Ruta 1) y el cementerio está vacío. Tras registrar la muerte en Ruta 1 (`201`), el equipo pasa a `[]` y el cementerio contiene Charmander con `muerto_en`. Una segunda muerte en Ruta 1 → `409` («El Pokémon de esa ruta ya murió»).
+- **Decisiones:**
+  - Consultas parametrizadas: prevención de inyección SQL; los datos nunca se concatenan al SQL.
+  - Validación en dos capas: Pydantic en la API (mensajes claros y barata) y restricciones en la BD (`NOT NULL`, `CHECK`, clave foránea, índice único) como segunda línea.
+  - Los eventos no se modifican (*append-only*): una muerte es un `INSERT`, y el equipo y el cementerio se derivan.
+  - La ruta vincula captura y muerte; la especie del cementerio sale de la captura para que cada Pokémon tenga un solo nombre.
+  - Solo el primer encuentro tiene índice único; «una sola muerte por ruta» se comprueba únicamente en la API, para no atar el esquema a una regla que podría ser configurable (opción de la Fase 4).
+  - Códigos HTTP: 201 creado, 404 inexistente, 409 conflicto con las reglas, 422 entrada inválida.
+- **Tropiezos:** (1) `Literal` sin importar en `main.py` (habría provocado `NameError` al arrancar); detectado en la revisión antes de reconstruir. (2) Importación de FastAPI duplicada. (3) Los endpoints de la pieza 3 no estaban guardados en disco cuando se pidió la revisión. (4) El `id` 3 de `encounters` no existe: lo consumió el `INSERT` directo que rechazó el índice único; las secuencias *identity* no reutilizan números aunque la inserción falle.
+- **Limitación conocida:** `"Ruta 1"` y `"ruta 1"` son rutas distintas; normalizar mayúsculas sería una mejora.
+- **Justificación:** convierte la web en una aplicación útil sin romper el modelo *append-only* acordado, aplica las reglas del Nuzlocke con mensajes claros y deja la integridad garantizada por la base de datos aunque la API falle.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar las consultas parametrizadas, la validación y las consultas derivadas; dar el código en piezas; revisar el código del alumno; hacer un pequeño refactor de `existe_run` y el índice de `schema.sql` a petición suya; y ejecutar varias pruebas HTTP y SQL en la BD de desarrollo. Parte del trabajo: Fase 2, API del MVP.
+- **Commit:** `feat(api): add runs, events, active team and graveyard endpoints`
+
+### [Idea opcional anotada: distinguir equipo y PC]
+- **Fecha:** 2026-10-11
+- **Archivos:** ninguno (decisión de alcance)
+- **Qué se planteó:** el jugador solo lleva 6 Pokémon en el equipo y guarda el resto en la PC; la pregunta era si los de la PC cuentan como «activos».
+- **Decisión:** en el MVP, «equipo activo» significa «Pokémon vivos» (equipo y PC), porque la aplicación solo ve eventos `captura`, `fallo` y `muerte`; el límite de 6 es una regla de honor que no se comprueba. Para no inducir a error, la sección de la interfaz (paso 2.3) se llamará **«Pokémon vivos»**. El endpoint `/team` no cambia.
+- **Idea opcional anotada** (junto a las reglas configurables por partida, Fase 4, solo si se cierra el MVP a tiempo): distinguir equipo y PC con dos eventos nuevos (`a_caja` y `a_equipo`), derivando el estado del último movimiento (modelo *append-only*), con una migración del `CHECK` de `event_type` (`DROP CONSTRAINT` y volver a crearlo) y cambios en las consultas. Coste alto para poco valor en el MVP.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: aclarar qué devuelve la consulta del equipo y valorar el coste de modelar equipo y PC. Parte del trabajo: alcance del modelo de datos.
+- **Commit:** se incluirá con el siguiente commit.

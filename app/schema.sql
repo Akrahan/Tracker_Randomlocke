@@ -15,3 +15,6 @@ CREATE TABLE IF NOT EXISTS encounters (
 );
 
 CREATE INDEX IF NOT EXISTS idx_encounters_run_id ON encounters (run_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_encounters_primer_encuentro
+    ON encounters (run_id, route) WHERE event_type IN ('captura', 'fallo');

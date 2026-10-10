@@ -135,3 +135,29 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** la web es el único servicio que publicará puerto, así que su imagen debe ser reproducible (versiones fijas), pequeña, sin secretos y sin privilegios. La capa de dependencias aparte hace que reconstruir tras un cambio de código sea casi instantáneo.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar el Dockerfile por piezas, dar el código en trozos, comprobar los ficheros escritos por el alumno y detectar los errores de ubicación y de tipo. Parte del trabajo: Fase 1, imagen de la web.
 - **Commit:** `feat(web): add FastAPI base image with non-root user`
+
+### [Paso 1.4: web en Compose, único puerto publicado y /status real]
+- **Fecha:** 2026-10-10
+- **Archivos:** `docker-compose.dev.yml` (servicio `web`), `app/requirements.txt` (`psycopg[binary]==3.3.6`), `app/main.py` (variables de entorno, conexión a la BD y endpoint `/status`)
+- **Comandos:** `docker run --rm python:3.12-slim pip index versions psycopg`, `docker run --rm -v "$PWD/app":/app python:3.12-slim pip install --dry-run -r /app/requirements.txt`, `dc up -d --build`, `dc ps`, `curl -i http://localhost:8000/status`, `dc stop db`, `dc start db`, `docker run --rm randomlocke-dev-web` y `docker run --rm -e DB_HOST=db -e POSTGRES_USER=x -e POSTGRES_DB=x randomlocke-dev-web` (prueba del *fail fast*). `dc` es el alias `docker compose --env-file .env.dev -f docker-compose.dev.yml`.
+- **Qué se ha hecho y cómo:**
+  - Servicio `web` en el compose: `build: ./app`, `ports: "${WEB_PORT}:8000"` (el único servicio con `ports`), `environment` con `DB_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD` y `POSTGRES_DB`, y `depends_on: db: condition: service_healthy`.
+  - `main.py` lee la configuración con `os.environ[...]` y `comprobar_db()` abre una conexión nueva con `psycopg.connect(..., connect_timeout=2)` y ejecuta `SELECT 1`. `/status` devuelve `{"db":"ok"}` con 200, o `{"db":"down"}` con 503.
+  - La web llega a la base de datos por el nombre de servicio `db`: Compose crea la red `randomlocke-dev_default` con DNS interno.
+- **Verificación (observable):**
+  - BD arriba: `200 OK`, `{"db":"ok"}`.
+  - Tras `dc stop db`: `503 Service Unavailable`, `{"db":"down"}`; `web` siguió `Up` (sin reiniciarse) mientras la BD estaba parada.
+  - Tras `dc start db`: `200 OK`, `{"db":"ok"}`, sin reiniciar la web.
+  - `dc ps`: `web` con `0.0.0.0:8000->8000/tcp` y `db` con `5432/tcp` (sin publicar).
+  - Al arrancar, Compose mostró `db` en `Healthy` antes de `web` en `Started`: la espera por el healthcheck funciona.
+  - Sin variables de entorno, `web` falla de inmediato con `KeyError: 'DB_HOST'`, y con solo la contraseña omitida, con `KeyError: 'POSTGRES_PASSWORD'` (*fail fast*).
+- **Decisiones:**
+  - `depends_on` con `service_healthy`, no solo orden de arranque: `web` espera a que Postgres acepte conexiones.
+  - Conexión nueva por cada comprobación (no *pool*): no hay conexiones caducadas tras reiniciarse la BD, así que `/status` se recupera solo; el `connect_timeout` evita que se cuelgue.
+  - BD caída → 503 (decisión 7 del plan); `/status` no devuelve el mensaje de error para no filtrar detalles internos.
+  - `psycopg[binary]`: evita compiladores en la imagen `slim`.
+  - Variables con `os.environ[...]` (sin valores por defecto): fallo rápido y ninguna credencial en el código.
+- **Tropiezos:** comandos pegados mientras otro escribía (`dc dc ps`, `ddc ps`); un `curl` cuyo cuerpo no se veía por la falta de salto de línea final de la respuesta, resuelto con `curl -s -w "\nHTTP %{http_code}\n"`.
+- **Justificación:** la web es el único punto de entrada de la arquitectura y la BD es imprescindible, así que `/status` debe reflejar en tiempo real su disponibilidad. La red interna de Compose y el DNS por nombre de servicio evitan publicar el puerto de la BD.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar el servicio `web` en el compose, `psycopg`, el *fail fast* y la conexión por petición; dar el código en piezas y revisar lo escrito por el alumno. Parte del trabajo: Fase 1, conexión web–BD.
+- **Commit:** `feat(dev): connect web to database with real /status endpoint`

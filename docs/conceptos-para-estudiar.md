@@ -217,7 +217,13 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué `CMD-SHELL`:** la otra forma, `["CMD", "pg_isready", ...]`, ejecuta el programa directamente y no interpreta variables de entorno.
 - **Pregunta de defensa:** ¿qué diferencia hay entre `${VAR}` y `$${VAR}` dentro de un compose?
 
-### `depends_on` con `condition: service_healthy` (pendiente de ver en el paso 1.4)
+### `build:` frente a `image:` en un servicio (paso 1.4)
+- **Qué es:** `image:` descarga una imagen ya hecha de un registro (como `postgres:16`). `build: ./app` le dice a Compose que construya la imagen con el `Dockerfile` de esa carpeta, que además es el **contexto de build**.
+- **Dónde y cómo se usa en mi proyecto:** `db` usa `image:` (imagen oficial) y `web` usa `build: ./app` (imagen propia). `docker compose up -d --build` fuerza la reconstrucción; sin `--build`, Compose reutiliza la imagen ya construida aunque hayas cambiado el código.
+- **Por qué así:** la web es código propio y hay que empaquetarlo; la base de datos es software estándar y no hace falta.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `image:` y `build:`, y cuándo se reconstruye la imagen?
+
+### `depends_on` con `condition: service_healthy` (paso 1.4)
 - **Qué es:** indica que un servicio espera a otro. Sin condición, solo ordena el **arranque**; con `service_healthy`, espera a que esté **listo**.
 - **Dónde y cómo se usa en mi proyecto:** `web` espera a que `db` esté `healthy`.
 - **Por qué así:** si solo ordenara el arranque y Postgres tardara 10 segundos en aceptar conexiones, `web` fallaría al conectar.
@@ -226,7 +232,7 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 
 ### Puertos publicados (`ports`)
 - **Qué es:** abre una puerta entre el host y un contenedor (`"8000:8000"`).
-- **Dónde y cómo se usa en mi proyecto:** solo `web` tiene `ports` (8000 en dev y 8080 en prod). `db` y `cache` no publican nada.
+- **Dónde y cómo se usa en mi proyecto:** solo `web` tiene `ports` (8000 en dev y 8080 en prod). `db` y `cache` no publican nada. Se escribe `"${WEB_PORT}:8000"`: a la izquierda el puerto **del host**, que sale del `.env` de cada entorno, y a la derecha el del **contenedor**, que es siempre 8000 (el que fija el `Dockerfile`).
 - **Por qué así:** el enunciado lo exige y reduce la superficie de ataque. Los contenedores se hablan por la red interna sin publicar nada.
 - **Pregunta de defensa:** ¿qué ocurre si publicas el puerto de la base de datos?
 
@@ -343,6 +349,32 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Dónde y cómo se usa en mi proyecto:** servicio `db`. El "comando de prueba de conexión" del enunciado será un `psql` ejecutado **dentro** del contenedor, sin necesidad de publicar puerto. `pg_isready` es el healthcheck.
 - **Por qué así:** el cliente viene en la imagen, así que no instalas nada en tu máquina.
 - **Pregunta de defensa:** ¿cómo compruebas la conexión a la BD si no publica ningún puerto?
+
+### `psycopg` y el extra `binary` (paso 1.4)
+- **Qué es:** `psycopg` (versión 3) es el *driver* que permite a Python hablar con PostgreSQL. El extra `[binary]` instala `psycopg-binary`, una versión ya compilada que incluye la librería de C que necesita (`libpq`).
+- **Para qué se usa:** abrir la conexión a la BD, ejecutar consultas SQL y leer los resultados desde `main.py`.
+- **Dónde y cómo se usa en mi proyecto:** `psycopg[binary]==3.3.6` en `app/requirements.txt`. Se conecta al host `db` (nombre del servicio) con las credenciales que llegan como variables de entorno.
+- **Por qué así:** sin `binary`, la imagen `slim` tendría que instalar compiladores y cabeceras de PostgreSQL para construir el driver, lo que la haría más pesada y ampliaría su superficie de ataque. La alternativa `psycopg2` es la generación anterior del mismo driver.
+- **Pregunta de defensa:** ¿por qué se instala `psycopg[binary]` en lugar de `psycopg` a secas?
+
+### Configuración desde variables de entorno y fallo rápido (paso 1.4)
+- **Qué es:** la aplicación lee su configuración con `os.environ["NOMBRE"]`. Si la variable no existe, lanza `KeyError` **al arrancar** (*fail fast*), en lugar de fallar más tarde con un error confuso.
+- **Dónde y cómo se usa en mi proyecto:** `main.py` lee `DB_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD` y `POSTGRES_DB`, que Compose le pasa desde `.env.dev`. Ninguna credencial está en el código.
+- **Por qué así:** si falta una variable, el contenedor se cae enseguida y `docker compose logs web` lo dice. La alternativa, `os.environ.get("X", "valor")`, escondería el fallo o, peor, pondría una contraseña por defecto en el código.
+- **Prueba real:** `docker run --rm randomlocke-dev-web` (sin variables) termina al instante con `KeyError: 'DB_HOST'`, porque es la primera que se lee (línea 8 de `main.py`). Dándole las demás y omitiendo solo la contraseña, el error pasa a ser `KeyError: 'POSTGRES_PASSWORD'` (línea 10). El fallo ocurre al **importar** `main.py`, antes de atender ninguna petición, porque esas lecturas están a nivel de módulo.
+- **Pregunta de defensa:** ¿qué ocurre si arrancas `web` sin la variable `POSTGRES_PASSWORD`?
+
+### Cómo leer un *traceback* de Python y qué es un `KeyError` (paso 1.4)
+- **Qué es:** un *traceback* es la lista de llamadas que llevó hasta un error, de la más antigua (arriba) a la más reciente (abajo). Lo importante está **al final**: la última línea dice el tipo de error y la anterior, en qué fichero y línea ocurrió. Un `KeyError: 'X'` significa "he buscado la clave `X` en un diccionario y no existe". `os.environ` se comporta como un diccionario de variables de entorno.
+- **Dónde y cómo se usa en mi proyecto:** `KeyError: 'DB_HOST'` y `KeyError: 'POSTGRES_PASSWORD'`, con la línea `File "/app/main.py", line 8` o `line 10` justo antes. Las líneas de `uvicorn`, `click` o `importlib` son el funcionamiento interno del arranque y se pueden ignorar.
+- **Por qué así:** saber leer el final del traceback permite localizar un fallo de configuración en segundos con `docker compose logs web`.
+- **Pregunta de defensa:** si `web` se cae al arrancar con un `KeyError`, ¿dónde miras y qué te dice?
+
+### Conexión por petición frente a *pool* de conexiones (paso 1.4)
+- **Qué es:** abrir una conexión nueva en cada comprobación, o mantener un conjunto de conexiones abiertas y reutilizarlas (*pool*).
+- **Dónde y cómo se usa en mi proyecto:** `/status` abre una conexión nueva, ejecuta `SELECT 1` con `connect_timeout=2` y la cierra.
+- **Por qué así:** cada comprobación empieza de cero, así que nunca hay una conexión caducada tras reiniciarse la BD: el estado se **recupera solo**. Es la opción más simple y correcta para un endpoint de salud. A mayor escala se usaría un *pool* (`psycopg_pool`), que reutiliza conexiones pero necesita gestionar las caídas. El `connect_timeout` evita que `/status` se quede colgado si la BD no responde.
+- **Pregunta de defensa:** ¿por qué `/status` no reutiliza una conexión abierta?
 
 ### FastAPI y Uvicorn (pendiente de ver en el paso 1.3)
 - **Qué es:** FastAPI es el framework de la API; Uvicorn, el servidor que la ejecuta.

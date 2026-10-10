@@ -204,3 +204,27 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Commit:** `build: add Makefile with build, up-dev, down, ps and logs targets`
 
 > **Puerta A (esqueleto andante) cumplida:** dev levanta con un solo comando (`make up-dev`), solo `web` publica puerto, `/status` refleja la BD en tiempo real y todos los contenedores quedan `healthy`. Etiqueta sugerida: `v0.1-esqueleto`.
+
+### [Paso 2.1: esquema e inicialización automática]
+- **Fecha:** 2026-10-11
+- **Archivos:** `app/schema.sql` (nuevo), `app/main.py` (inicialización al arrancar), `Makefile` (target `clean`, adelantado desde el paso 3.4)
+- **Comandos:** `make -n clean`, `cat -A Makefile`, `docker compose ... exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < app/schema.sql` (dos veces) y `\dt`, `make clean`, `make up-dev`, `make down`, `make ps`, `curl -s -w "\nHTTP %{http_code}\n" http://localhost:8000/status`, `docker compose ... logs web`; prueba final de recreación (ejecutada por la IA a petición del alumno): `DROP TABLE encounters, runs;`, `\dt`, `docker compose ... restart web`, `\dt`.
+- **Qué se ha hecho y cómo:**
+  - **Decisión 5 cerrada: opción B**, SQL idempotente al arrancar la app. La alternativa `initdb.d` solo se ejecuta con el volumen vacío y obligaría a borrar los datos para cambiar el esquema.
+  - `app/schema.sql`: `runs` (`id` identity, `name`, `created_at`) y `encounters` (`id` identity, `run_id` con clave foránea a `runs`, `event_type` con `CHECK` en `captura`/`fallo`/`muerte`, `route`, `species`, `created_at`, `details JSONB`) con `CREATE TABLE IF NOT EXISTS`, más `idx_encounters_run_id`.
+  - `main.py`: `conectar()` centraliza la conexión; `inicializar_db()` lee `schema.sql` y lo ejecuta con hasta 10 intentos separados por 2 s; el `lifespan` de FastAPI lo llama al arrancar. `comprobar_db()` reutiliza `conectar()`.
+  - `Makefile`: `make clean` ejecuta `down -v` (borra también el volumen) tras imprimir un aviso; `.PHONY` actualizado. Sin confirmación interactiva: `make` usa `dash`, que no soporta `read -p`.
+- **Modelo de datos (acordado):** *append-only*; el equipo activo no se guarda, se deriva (capturas sin muerte posterior). La **ruta** vincula captura y muerte (en un Nuzlocke solo hay una captura por ruta); la API validará en el paso 2.2 que no haya una segunda captura en la misma ruta ni una muerte en una ruta sin captura. `species` es el nombre de la especie (no el tipo): los tipos, si se implementa la funcionalidad opcional de cobertura, irán en `details`.
+- **Verificación (observable):**
+  - Aplicar `schema.sql` dos veces con `psql`: la segunda da `NOTICE: relation ... already exists, skipping` (idempotente). `\dt` lista `runs` y `encounters`.
+  - `make down` y `make up-dev` con el volumen lleno: `web` arranca sin errores y `/status` devuelve `{"db":"ok"}` con 200.
+  - **Prueba de recreación:** `DROP TABLE encounters, runs;` deja `Did not find any relations`; tras `restart web` (sin tocar `db`, `Up 6 minutes`) vuelven a existir `encounters` y `runs`, creadas por la propia aplicación.
+- **Decisiones:**
+  - Restricciones en la base de datos (`NOT NULL`, `CHECK`, clave foránea) como segunda línea de defensa: la API valida, pero la BD tampoco admite datos inválidos.
+  - `TEXT` con `CHECK` y no `ENUM`: añadir un tipo de evento es más fácil. `GENERATED ALWAYS AS IDENTITY` en lugar de `SERIAL`.
+  - Reintentos al arrancar, además del `depends_on: service_healthy`, para el caso de que `web` se reinicie con la BD caída.
+  - `make clean` adelantado: la verificación del plan necesita probar desde cero.
+- **Tropiezos:** (1) el `Makefile` pegado en el chat tenía el target `clean`, pero no estaba guardado en disco (`No rule to make target 'clean'`); se detectó con `make -n clean`. (2) No se podía asegurar que las tablas las hubiera creado la app y no el `schema.sql` aplicado a mano antes, por lo que se añadió la prueba de borrar las tablas y reiniciar `web`.
+- **Justificación:** el enunciado exige que la BD se inicialice automáticamente o al arrancar la aplicación. Hacerlo desde la web, de forma idempotente, mantiene el esquema sincronizado con el código sin perder datos y funciona igual con volúmenes nuevos o ya llenos.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar la decisión 5 y el modelo de datos, dar el SQL y el código en piezas, y ejecutar a petición del alumno la prueba de borrado y recreación de tablas en la BD de desarrollo (vacía). Parte del trabajo: Fase 2, esquema e inicialización.
+- **Commit:** `feat(db): add runs/encounters schema with idempotent init on startup`

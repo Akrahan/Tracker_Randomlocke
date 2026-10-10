@@ -348,7 +348,7 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** lo exige el enunciado (Makefile o script). Un único sitio con el comando evita olvidar el `--env-file` o mezclar dev con prod. El nombre de proyecto ya lo fija `name:` en el compose, así que no se repite con `-p`.
 - **`.PHONY`:** marca los targets que son acciones y no ficheros. Sin él, si existiera un fichero llamado `build`, `make build` diría que ya está hecho y no ejecutaría nada.
 - **El tabulador:** si las líneas de comando empiezan con espacios, `make` falla con `*** missing separator. Stop.`. `.editorconfig` fuerza tabuladores en `[Makefile]`, pero solo si la extensión EditorConfig está activa. Se comprueba con `cat -A Makefile` (los tabuladores salen como `^I`).
-- **`down` frente a `clean` (decisión 8):** `make down` ejecuta `docker compose down`, que para y elimina contenedores y red pero **conserva los volúmenes**, así que los datos de la BD sobreviven. `make clean` (paso 3.4) añadirá `-v` para borrarlos también. Se comprueba con `docker volume ls | grep pgdata` tras un `make down`: el volumen sigue ahí.
+- **`down` frente a `clean` (decisión 8):** `make down` ejecuta `docker compose down`, que para y elimina contenedores y red pero **conserva los volúmenes**, así que los datos de la BD sobreviven. `make clean` (adelantado al paso 2.1, porque la verificación necesita probar desde cero) ejecuta `down -v` para borrarlos también. Imprime antes un aviso con `@echo` (la `@` oculta el propio comando); no pide confirmación porque `make` usa `/bin/sh` (`dash` en Ubuntu), que no soporta `read -p`. Se comprueba con `docker volume ls | grep pgdata` tras un `make down`: el volumen sigue ahí.
 - **`make logs`:** usa `logs -f --tail=50`: sigue los logs en directo empezando por las últimas 50 líneas. Se queda esperando; se sale con Ctrl+C.
 - **Ensayo en seco:** `make -n up-dev` imprime el comando que ejecutaría sin ejecutarlo; es la forma segura de comprobar un Makefile.
 - **Pregunta de defensa:** ¿qué hace `make up-dev` por debajo, y por qué el Makefile exige tabuladores?
@@ -419,6 +419,36 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Dónde y cómo se usa en mi proyecto:** BD caída → `503`; caché caída → `200` con estado `degraded`; en dev la caché figura como "no aplica". La UI lo consulta periódicamente y el healthcheck de `web` lo usa.
 - **Por qué así:** la BD es imprescindible y la caché es opcional. Si el healthcheck de `web` fallara por la caché, el contenedor se marcaría `unhealthy` por un servicio no crítico.
 - **Pregunta de defensa:** ¿por qué la BD caída da 503 y la caché caída solo `degraded`?
+
+### Inicialización de la base de datos: `initdb.d` o SQL idempotente (decisión 5, paso 2.1)
+- **Qué es:** las tablas tienen que crearse automáticamente (lo exige el enunciado: "inicializarse automáticamente o generarse al iniciar la aplicación"). Hay dos formas. **`initdb.d`:** la imagen de Postgres ejecuta los `.sql` que haya en `/docker-entrypoint-initdb.d`, **solo la primera vez**, cuando el volumen está vacío. **SQL idempotente al arrancar la app:** `web` ejecuta `CREATE TABLE IF NOT EXISTS ...` cada vez que arranca; si la tabla ya existe, no hace nada.
+- **Para qué se usa:** que la base de datos tenga su esquema sin crearlo a mano.
+- **Dónde y cómo se usa en mi proyecto:** pendiente de decidir (decisión 5). Con `initdb.d` habría una carpeta `db/` con un `.sql` montada en el servicio `db`; con SQL idempotente, el código estaría en `app/`.
+- **Por qué importa la diferencia:** con `initdb.d`, si el volumen ya existe, el script **no se vuelve a ejecutar**, y para aplicar un cambio de esquema hay que borrar el volumen (`make clean`). Con SQL idempotente funciona con volúmenes ya existentes. Ojo: `IF NOT EXISTS` no modifica tablas ya creadas; para añadir una columna haría falta además `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`.
+- **Pregunta de defensa:** ¿qué ocurre con las tablas si reinicias la base de datos con el volumen ya lleno, según cada opción?
+
+### Decisión 5 cerrada: SQL idempotente al arrancar la app (paso 2.1)
+- **Qué es:** se eligió la opción B: `web` ejecuta `CREATE TABLE IF NOT EXISTS` al arrancar. Idempotente significa que ejecutarlo muchas veces da el mismo resultado.
+- **Por qué así:** con `initdb.d` solo se ejecuta con el volumen vacío, y cambiar el esquema obligaría a borrar el volumen (perder datos), justo lo que demuestra la persistencia. El enunciado admite "generarse al iniciar la aplicación". `IF NOT EXISTS` no modifica tablas ya creadas: para una columna nueva se usaría `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`. Por eso `encounters` incluye `details JSONB`: para ampliar el modelo en la Fase 2 sin tocar el esquema.
+- **Pregunta de defensa:** ¿por qué se inicializa la BD desde la aplicación y no con `initdb.d`, y qué no resuelve `IF NOT EXISTS`?
+
+### Inicialización al arrancar: `lifespan` y reintentos (paso 2.1)
+- **Qué es:** el `lifespan` de FastAPI es un hook que ejecuta código **al arrancar** la aplicación, antes de atender peticiones (lo que va antes del `yield`). `inicializar_db()` lee `schema.sql` y lo ejecuta contra la BD, con hasta 10 intentos separados por 2 segundos; si se agotan, la excepción detiene el arranque (*fail fast*).
+- **Dónde y cómo se usa en mi proyecto:** `app/main.py` (`inicializar_db` y `lifespan`) y `app/schema.sql`, que el `Dockerfile` copia con `COPY . .`. `conectar()` centraliza los parámetros de conexión y lo usan `inicializar_db` y `comprobar_db`. Se verifica con `make clean` y `make up-dev`: las tablas aparecen sin crearlas a mano, y con `make down` y `make up-dev` (volumen lleno) no hay errores.
+- **Por qué así:** el `depends_on: service_healthy` cubre el arranque conjunto, pero no un reinicio de `web` con la BD caída; el reintento es una defensa barata. Como el SQL es idempotente, ejecutarlo en cada arranque es seguro. Es el cierre de la decisión 5 (opción B).
+- **Prueba real:** se borraron las tablas con `DROP TABLE encounters, runs;` (`\dt` dijo `Did not find any relations`) y se reinició solo `web` con `docker compose restart web`: unos segundos después `\dt` volvía a mostrar `encounters` y `runs`, creadas por la aplicación. `db` seguía `Up 6 minutes`, es decir, no se había reiniciado. Reiniciar `db` con su volumen intacto tampoco pierde las tablas: los datos viven en el volumen, no en el contenedor.
+- **Pregunta de defensa:** ¿qué ocurre con las tablas si reinicias solo `web`, y qué si borras el volumen?
+
+### Modelo de datos: `runs`, `encounters` y el equipo derivado (paso 2.1)
+- **Qué es:** `runs` guarda cada partida (`id`, `name`, `created_at`). `encounters` guarda cada evento (`id`, `run_id`, `event_type` ∈ {`captura`, `fallo`, `muerte`}, `route`, `species`, `created_at`, `details JSONB`). El **equipo activo** no se almacena: se calcula como las capturas sin una muerte posterior en la misma ruta.
+- **Por qué así:** en un Nuzlocke solo se captura un Pokémon por ruta, así que la ruta identifica al Pokémon dentro de una partida, y la muerte se enlaza por ruta sin columnas extra (alternativa: una columna `capture_id`, más precisa pero más compleja). `event_type` será `TEXT` con `CHECK` en vez de un `ENUM` de Postgres, porque añadir un tipo después es más fácil; los identificadores usarán `GENERATED ALWAYS AS IDENTITY`, la forma estándar de autonumerar frente al antiguo `SERIAL`.
+- **Pregunta de defensa:** ¿por qué registrar una muerte es un `INSERT` y no un `UPDATE`, y cómo se sabe qué Pokémon está vivo?
+
+### Esquema SQL: claves, restricciones y tipos (paso 2.1)
+- **Qué es:** `app/schema.sql` crea las tablas con `CREATE TABLE IF NOT EXISTS`. `PRIMARY KEY` identifica cada fila; `GENERATED ALWAYS AS IDENTITY` hace que Postgres autonumere ese identificador; `REFERENCES runs (id)` es una **clave foránea** (un evento no puede apuntar a una partida inexistente); `CHECK (event_type IN (...))` limita los valores admitidos; `NOT NULL` hace obligatorio un dato; `TIMESTAMPTZ DEFAULT now()` guarda fecha y hora con zona horaria y se rellena sola; `JSONB` guarda datos flexibles en JSON; `CREATE INDEX` acelera buscar los eventos de una partida.
+- **Dónde y cómo se usa en mi proyecto:** tablas `runs` y `encounters` y el índice `idx_encounters_run_id`. Se prueba aplicando el fichero dos veces con `psql`: la segunda da `NOTICE: relation ... already exists, skipping`, lo que demuestra que es idempotente.
+- **Por qué así:** las restricciones son una **segunda línea de defensa**: la API valida los datos, pero la base de datos tampoco admite datos inválidos si algo falla o alguien inserta a mano. La clave foránea y el `CHECK` mantienen la integridad.
+- **Pregunta de defensa:** ¿qué hace `IF NOT EXISTS` y por qué la base de datos debe validar datos aunque la API ya lo haga?
 
 ### Modelo *append-only* (pendiente de ver en el paso 2.1)
 - **Qué es:** los eventos solo se **añaden**, nunca se actualizan ni se borran.

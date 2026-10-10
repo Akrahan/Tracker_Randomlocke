@@ -6,6 +6,7 @@ from typing import Literal
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -65,17 +66,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Tracker Randomlocke", lifespan=lifespan)
 
 
-@app.get("/")
-def raiz():
-    return {"mensaje": "Tracker Randomlocke funcionando"}
-
-
 @app.get("/status")
 def status(response: Response):
     db_ok = comprobar_db()
     if not db_ok:
         response.status_code = 503
     return {"db": "ok" if db_ok else "down"}
+
 
 class RunNueva(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -90,6 +87,8 @@ def crear_run(run: RunNueva):
             "INSERT INTO runs (name) VALUES (%s) RETURNING id, name, created_at",
             (run.name,),
         ).fetchone()
+
+
 class EventoNuevo(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -129,6 +128,25 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
             raise HTTPException(status_code=409, detail="Evento duplicado")
 
 
+@app.get("/runs")
+def listar_runs():
+    with conectar() as conn:
+        return conn.execute(
+            "SELECT id, name, created_at FROM runs ORDER BY id DESC"
+        ).fetchall()
+
+
+@app.get("/runs/{run_id}/encounters")
+def listar_eventos(run_id: int):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        return conn.execute(
+            "SELECT id, event_type, route, species, created_at "
+            "FROM encounters WHERE run_id = %s ORDER BY id",
+            (run_id,),
+        ).fetchall()
+
+
 @app.get("/runs/{run_id}/team")
 def equipo_activo(run_id: int):
     with conectar() as conn:
@@ -157,3 +175,6 @@ def cementerio(run_id: int):
             "ORDER BY m.created_at",
             (run_id,),
         ).fetchall()
+
+
+app.mount("/", StaticFiles(directory=Path(__file__).with_name("static"), html=True), name="static")

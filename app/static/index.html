@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracker Randomlocke</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Tracker Randomlocke</h1>
+    <div id="estado" class="estado">
+      <span id="estado-db" class="punto desconocido"></span>
+      <span id="estado-texto">Comprobando...</span>
+    </div>
+  </header>
+
+  <main>
+    <p id="mensaje" role="alert"></p>
+
+    <section>
+      <h2>Partida</h2>
+      <select id="selector-run"></select>
+      <form id="form-run">
+        <input id="nombre-run" placeholder="Nombre de la nueva partida" maxlength="100" required>
+        <button>Crear</button>
+      </form>
+    </section>
+
+    <section id="seccion-eventos" hidden>
+      <h2>Registrar evento</h2>
+      <form id="form-evento">
+        <select id="tipo-evento">
+          <option value="captura">Captura</option>
+          <option value="fallo">Fallo</option>
+          <option value="muerte">Muerte</option>
+        </select>
+        <input id="ruta" placeholder="Ruta" maxlength="100" required>
+        <input id="especie" placeholder="Especie" maxlength="100" required>
+        <button>Registrar</button>
+      </form>
+    </section>
+
+    <section id="seccion-datos" hidden>
+      <h2>Pokémon vivos</h2>
+      <ul id="vivos"></ul>
+
+      <h2>Capturas por ruta</h2>
+      <table>
+        <thead><tr><th>Ruta</th><th>Resultado</th><th>Especie</th></tr></thead>
+        <tbody id="rutas"></tbody>
+      </table>
+
+      <h2>Cementerio</h2>
+      <ul id="cementerio"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

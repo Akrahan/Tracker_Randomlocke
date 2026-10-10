@@ -217,6 +217,14 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué `CMD-SHELL`:** la otra forma, `["CMD", "pg_isready", ...]`, ejecuta el programa directamente y no interpreta variables de entorno.
 - **Pregunta de defensa:** ¿qué diferencia hay entre `${VAR}` y `$${VAR}` dentro de un compose?
 
+### Healthcheck de la web sin `curl` (paso 1.5)
+- **Qué es:** un healthcheck que, desde **dentro** del contenedor `web`, pide `/status` a la propia app con el módulo `urllib` de Python. Si la respuesta es un error HTTP (como `503`) o no llega a tiempo, el comando termina con código distinto de 0 y cuenta como fallo.
+- **Dónde y cómo se usa en mi proyecto:** bloque `healthcheck:` del servicio `web` en el compose: `["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status', timeout=3)"]`, con `interval 10s`, `timeout 5s`, `retries 3` y `start_period 10s`.
+- **Por qué así:** la imagen `slim` no incluye `curl`; instalarlo añadiría un paquete y superficie de ataque, mientras que Python ya está. Se define en el compose (como el de `db`) y no en el `Dockerfile`. Se usa `CMD` y no `CMD-SHELL` porque no hay variables que expandir. `localhost:8000` es correcto porque la comprobación corre dentro de `web`, donde la app escucha siempre en 8000.
+- **Qué cuenta como sano (decisión 7):** BD caída → `/status` da 503 → `web` `unhealthy`. Caída solo de la caché → `/status` da 200 con `degraded` → `web` sigue `healthy`, porque la caché es opcional.
+- **Consecuencia:** Compose no reinicia ni para un contenedor `unhealthy`; el estado es informativo y lo usan los `depends_on` y los orquestadores que sí reinician contenedores.
+- **Pregunta de defensa:** ¿por qué el healthcheck de `web` usa Python en lugar de `curl`, y por qué una caché caída no debe marcarlo `unhealthy`?
+
 ### `build:` frente a `image:` en un servicio (paso 1.4)
 - **Qué es:** `image:` descarga una imagen ya hecha de un registro (como `postgres:16`). `build: ./app` le dice a Compose que construya la imagen con el `Dockerfile` de esa carpeta, que además es el **contexto de build**.
 - **Dónde y cómo se usa en mi proyecto:** `db` usa `image:` (imagen oficial) y `web` usa `build: ./app` (imagen propia). `docker compose up -d --build` fuerza la reconstrucción; sin `--build`, Compose reutiliza la imagen ya construida aunque hayas cambiado el código.

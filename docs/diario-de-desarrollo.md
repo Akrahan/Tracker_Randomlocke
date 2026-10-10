@@ -161,3 +161,25 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** la web es el único punto de entrada de la arquitectura y la BD es imprescindible, así que `/status` debe reflejar en tiempo real su disponibilidad. La red interna de Compose y el DNS por nombre de servicio evitan publicar el puerto de la BD.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar el servicio `web` en el compose, `psycopg`, el *fail fast* y la conexión por petición; dar el código en piezas y revisar lo escrito por el alumno. Parte del trabajo: Fase 1, conexión web–BD.
 - **Commit:** `feat(dev): connect web to database with real /status endpoint`
+
+### [Paso 1.5: healthcheck de la web]
+- **Fecha:** 2026-10-10
+- **Archivos:** `docker-compose.dev.yml` (bloque `healthcheck` del servicio `web`)
+- **Comandos:** `dc config --quiet`, `dc up -d --build`, `dc ps`, `dc stop db`, `dc ps`, `dc start db`, `dc ps`. `dc` es el alias `docker compose --env-file .env.dev -f docker-compose.dev.yml`.
+- **Qué se ha hecho y cómo:**
+  - Healthcheck de `web` en el compose: `["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status', timeout=3)"]`, con `interval 10s`, `timeout 5s`, `retries 3` y `start_period 10s`.
+  - `urlopen` lanza una excepción ante un error HTTP (como 503) o un tiempo agotado, y el comando termina con código distinto de 0, que Docker cuenta como fallo.
+- **Verificación (observable):**
+  - Con todo en marcha: `db` `Up 2 hours (healthy)` y `web` `Up 20 seconds (healthy)`.
+  - Tras `dc stop db`: `web` pasó a `Up About a minute (unhealthy)`, porque `/status` devuelve 503.
+  - Tras `dc start db`: `db` `healthy` y `web` volvió a `Up About a minute (healthy)` **sin reiniciarse** (el contador de actividad no se reinició).
+- **Decisiones:**
+  - Python (`urllib`) en lugar de instalar `curl`: la imagen `slim` no lo trae y así no se añaden paquetes ni superficie de ataque, ni se modifica el `Dockerfile`.
+  - Healthcheck definido en el compose (como el de `db`) y no en el `Dockerfile`, con `CMD` y no `CMD-SHELL` porque no hay variables que expandir.
+  - `localhost:8000` dentro del healthcheck (se ejecuta dentro de `web`, donde la app escucha siempre en 8000), distinto del `db` que usa `main.py` para llegar a otro contenedor.
+  - Semántica (decisión 7): BD caída → `/status` 503 → `web` `unhealthy`; una futura caída solo de la caché dará 200 con `degraded` y `web` seguirá `healthy`.
+  - Compose no reinicia contenedores `unhealthy`: el estado es informativo y lo usan los `depends_on` y los orquestadores.
+- **Tropiezos:** al copiar la instrucción se perdió el bloque de código; se aclaró con el fichero completo y la regla de la sangría (`healthcheck:` es hermano de `depends_on`, no hijo).
+- **Justificación:** el enunciado exige healthcheck en todos los contenedores y que su estado se refleje en la aplicación; `web` deriva su salud de `/status`, que consulta la BD de forma real, de modo que el estado de salud del contenedor refleja el de sus dependencias.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: comparar las opciones de healthcheck, dar el bloque y revisar el compose del alumno. Parte del trabajo: Fase 1, healthcheck de la web.
+- **Commit:** `feat(web): add healthcheck to web container`

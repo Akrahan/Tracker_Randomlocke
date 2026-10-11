@@ -177,6 +177,13 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** `exec` permite probar la conexión sin publicar el puerto de la BD ni instalar `psql` en tu máquina. Cada comando de Compose necesita `--env-file` y `-f` para saber qué entorno usar; en una sesión se puede abreviar con un `alias`, y de forma definitiva con el Makefile.
 - **Pregunta de defensa:** ¿cómo compruebas la conexión a la BD si no publica ningún puerto?
 
+### Prueba de persistencia: borrar el contenedor, no el volumen (paso 2.4)
+- **Qué es:** el enunciado exige demostrar la persistencia *insertando información en la base de datos, eliminando el contenedor y volviéndolo a iniciar, verificando que los datos se mantienen*. El contenedor es desechable y el volumen es donde viven los datos, así que borrar el primero no afecta a los segundos. Tres comandos que conviene distinguir: `docker compose rm -s -f db` (para y **elimina solo el contenedor** `db`; conserva red y volumen), `docker compose down` (elimina todos los contenedores y la red; conserva los volúmenes, es `make down`) y `docker compose down -v` (elimina además los **volúmenes**: pierde los datos, es `make clean`).
+- **Cómo se demuestra que es un contenedor nuevo:** el ID del contenedor y su fecha de creación cambian tras recrearlo (`docker inspect`), mientras que el volumen (`docker volume ls`) y su contenido son los mismos. Se comprueba además que los datos coinciden antes y después con el API y con `psql`.
+- **Dónde y cómo se usa en mi proyecto:** sobre la BD de desarrollo, con partidas y eventos reales creados desde la API. La evidencia se guarda en `docs/pruebas.md`, para el README.
+- **Por qué así:** es el requisito central de la práctica y la razón de elegir un volumen con nombre. Contraste: con `down -v` (o `make clean`) los datos **sí** se pierden, por eso van en un target aparte.
+- **Pregunta de defensa:** ¿qué diferencia hay entre eliminar el contenedor de la BD y eliminar su volumen, y cuál de los dos pierde los datos?
+
 ### Cómo leer la columna PORTS de `docker compose ps` (paso 1.2)
 - **Qué es:** un servicio **publicado** muestra una flecha, por ejemplo `0.0.0.0:8000->8000/tcp` (puerto del host hacia el del contenedor). Uno que solo expone el puerto internamente muestra `5432/tcp`, sin flecha.
 - **Dónde y cómo se usa en mi proyecto:** `db` debe mostrar `5432/tcp` sin flecha: Postgres escucha dentro de la red de Docker, pero tu máquina no puede conectarse desde fuera.

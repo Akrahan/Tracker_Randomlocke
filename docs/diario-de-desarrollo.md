@@ -304,3 +304,25 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige que la aplicación muestre el estado de la BD y de la caché y que refleje dinámicamente cuándo un servicio deja de estar disponible; una interfaz servida por la propia web, con *polling* del endpoint `/status`, lo cumple con un único contenedor y un único puerto publicado.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar `StaticFiles`, el mismo origen y CORS, el *polling* y XSS; dar el código en piezas; aplicar a petición del alumno los cambios de `main.py` y `index.html`; y ejecutar la verificación en el navegador integrado. Parte del trabajo: Fase 2, interfaz estática.
 - **Commit:** `feat(ui): add static interface with live status, vivos, routes and graveyard`
+
+### [Paso 2.4: prueba de persistencia en dev]
+- **Fecha:** 2026-10-11
+- **Archivos:** `docs/pruebas.md` (nuevo, escrito por el alumno con las salidas reales)
+- **Comandos:** `alias dc='docker compose --env-file .env.dev -f docker-compose.dev.yml'`; `curl -X POST /runs` y `POST /runs/{id}/events` (datos marcados); `docker inspect -f 'ID: {{printf "%.12s" .Id}}  CREADO: {{.Created}}' randomlocke-dev-db-1`; `docker volume ls | grep pgdata`; `dc exec db ... psql ... "SELECT (SELECT count(*) FROM runs) AS partidas, (SELECT count(*) FROM encounters) AS eventos;"`; `curl /runs/{id}/team`; **`dc rm -s -f db`** (elimina solo el contenedor); `docker ps -a --filter name=db-1`; `curl /status`; `dc up -d db`. La prueba la ejecutó el alumno; la IA revisó cada salida y repitió los `GET` de lectura para contrastarla.
+- **Qué se ha hecho y cómo:** se creó una partida marcada (`id=4`, «Persistencia 20261011-140538») con una captura (Eevee en «Ruta Persistencia») y se anotó el estado de la BD; se eliminó el **contenedor** `db` sin tocar el volumen; se comprobó que el volumen seguía y que la web notaba la caída; se recreó el contenedor y se comparó el estado.
+- **Verificación (observable):**
+  - ID del contenedor `db`: `2335b1affc07` (creado `2026-10-10T21:54:39Z`) → **`44e9376fb8b5`** (creado `2026-10-11T15:15:00Z`): es un contenedor nuevo.
+  - Volumen: `randomlocke-dev_pgdata` antes, durante y después.
+  - Filas: **4 partidas y 7 eventos** antes y después.
+  - API: Eevee en la partida 4 con la misma fecha (`2026-10-11T12:05:52Z`).
+  - Con el contenedor eliminado: `/status` → `503` `{"db":"down"}`; tras recrearlo: `200` `{"db":"ok"}`. `web` pasó a `unhealthy` y volvió a `healthy` sin reiniciarse.
+- **Decisiones:**
+  - Se elimina el contenedor con `docker compose rm -s -f db` (conserva red y volumen) y no con `down -v` ni `make clean`, que borrarían el volumen.
+  - Los datos de prueba llevan una marca con la fecha para que la comprobación sea inequívoca.
+  - La evidencia queda en `docs/pruebas.md` para el README (apartado de pruebas y verificaciones).
+- **Tropiezos:** (1) `docs/pruebas.md` no existía cuando el alumno dio el paso por hecho; se creó después. (2) Un `curl .../team` lanzado a los segundos de recrear `db` salió vacío (la BD estaba en `health: starting` y `web` aún `unhealthy`); repetido con la BD `healthy` devolvió a Eevee.
+- **Justificación:** es el requisito central del enunciado («insertando información, eliminando el contenedor y volviéndolo a iniciar, verificando que los datos se mantienen») y la razón de usar un volumen con nombre: el contenedor es desechable y los datos viven en el volumen.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: diseñar la prueba por pasos con evidencia comprobable, explicar la diferencia entre eliminar el contenedor y el volumen, y revisar las salidas. Parte del trabajo: Fase 2, persistencia en dev.
+- **Commit:** `docs: add persistence test evidence for dev`
+
+> **Fase 2 (MVP en dev) cerrada.** Resumen en `docs/resumenes/fase-2.md`.

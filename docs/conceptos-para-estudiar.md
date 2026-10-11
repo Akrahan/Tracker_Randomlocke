@@ -540,6 +540,23 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** el enunciado exige dos ficheros de orquestación separados y un `.env` por entorno. Reutilizar las mismas credenciales en dev y prod sería un riesgo: si se filtran las de uno, quedan comprometidas las del otro.
 - **Pregunta de defensa:** ¿qué pasaría si dev y prod usaran el mismo `name:` o el mismo puerto?
 
+### Política de reinicio `restart: unless-stopped` (paso 3.1)
+- **Qué es:** indica a Docker qué hacer cuando un contenedor termina. `no` (por defecto): nada. `on-failure`: reiniciarlo solo si termina con error. `always`: reiniciarlo siempre, incluso si lo paraste a mano. `unless-stopped`: reiniciarlo siempre **salvo** que se haya parado explícitamente.
+- **Dónde y cómo se usa en mi proyecto:** en los tres servicios de `docker-compose.prod.yml`. En dev no se usa: allí interesa que un fallo se vea y se pare.
+- **Por qué así:** en producción, si el proceso se cae o se reinicia la máquina o Docker, los servicios vuelven solos. `unless-stopped` respeta que el operador haya parado algo a propósito (`docker compose stop`). Importante: **no actúa sobre contenedores `unhealthy`** (siguen vivos); solo reinicia los que terminan. Es una diferencia real entre los dos entornos.
+- **Pregunta de defensa:** ¿qué diferencia hay entre `always` y `unless-stopped`, y reinicia Docker un contenedor `unhealthy`?
+
+### Dos ficheros independientes: duplicación frente a *override* (paso 3.1)
+- **Qué es:** `docker-compose.prod.yml` repite buena parte de `docker-compose.dev.yml` (por ejemplo, la definición de `db`). La alternativa habitual es un fichero base más uno de *override* (`-f base.yml -f prod.yml`), que evita repetir.
+- **Por qué así:** el enunciado exige dos ficheros separados, y son más fáciles de leer y de defender por separado, a costa de mantener algo de duplicación. Cada entorno se entiende sin abrir otro fichero.
+- **Pregunta de defensa:** ¿por qué dos ficheros independientes en vez de uno base con *overrides*?
+
+### El servicio `web` de producción: dos dependencias y una imagen por entorno (paso 3.1)
+- **Qué es:** `web` en `docker-compose.prod.yml` es como el de dev, con tres diferencias: `restart: unless-stopped`, las variables de la caché (`CACHE_ENABLED`, `CACHE_HOST`, `REDIS_PASSWORD`) y un `depends_on` con **dos** condiciones `service_healthy` (`db` y `cache`): arranca solo cuando ambos están sanos. El puerto del host sale de `WEB_PORT` (8080 en prod).
+- **Una imagen por entorno:** ambos ficheros usan `build: ./app`, pero Compose nombra la imagen con el proyecto (`randomlocke-dev-web` y `randomlocke-prod-web`): se construyen por separado a partir del mismo `Dockerfile`, así que no se pisan.
+- **Prueba real:** con los tres servicios `healthy`, solo `web` publica puerto (`0.0.0.0:8080->8000/tcp`); `db` (`5432/tcp`) y `cache` (`6379/tcp`) no. La web, al arrancar, crea el esquema en la BD de prod, que estaba vacía (decisión 5-B también en prod). Hasta el paso 3.3 la aplicación todavía no usa Redis: las variables de la caché llegan pero no tienen efecto.
+- **Pregunta de defensa:** ¿por qué `web` depende de `cache` si todavía no la usa, y qué debería pasar con la aplicación si Redis cae (decisión 7)?
+
 ### Redis: contraseña, healthcheck sin `-a` y caché sin persistencia (paso 3.1)
 - **Qué es:** Redis arranca con `--requirepass` y la contraseña viene de una variable de entorno (`REDIS_PASSWORD`), nunca escrita en el YAML. El comando usa `$$REDIS_PASSWORD` para que la resuelva la shell del contenedor y `exec` para que `redis-server` sea el proceso principal. Para el healthcheck se usa la variable `REDISCLI_AUTH` en lugar de `redis-cli -a`, porque `-a` imprime un aviso de que pasar la contraseña por la línea de comandos es inseguro. Se desactiva la persistencia (`--save "" --appendonly no`).
 - **Dónde y cómo se usa en mi proyecto:** servicio `cache` de `docker-compose.prod.yml`, sin `ports` (solo accesible por la red interna) y con healthcheck que comprueba que `redis-cli ping` responde `PONG`.

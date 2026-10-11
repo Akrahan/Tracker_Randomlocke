@@ -326,3 +326,30 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Commit:** `docs: add persistence test evidence for dev`
 
 > **Fase 2 (MVP en dev) cerrada.** Resumen en `docs/resumenes/fase-2.md`.
+
+### [Paso 3.1: .env.prod y docker-compose.prod.yml]
+- **Fecha:** 2026-10-11
+- **Archivos:** `.env.prod.example` (versionado); `.env.prod` (real, ignorado por Git, no versionado); `docker-compose.prod.yml`
+- **Comandos:** `cp .env.prod.example .env.prod`, `openssl rand -base64 24` (dos contraseñas distintas entre sí y de las de dev), `chmod 600 .env.prod`, `grep -n "PASSWORD" .env.prod.example` (comprobar que la plantilla solo tiene valores ficticios), `git check-ignore -v .env.prod`, `docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet`, `... up -d db`, `... up -d cache`, `... up -d --build`, `... ps`, `... exec cache sh -c 'REDISCLI_AUTH=$REDIS_PASSWORD redis-cli ping'`, `... exec cache redis-cli ping`, `... exec cache ... redis-cli config get save`, `... exec db ... psql ... "\dt"`, `docker ps --format "table {{.Names}}\t{{.Ports}}"`, `curl http://localhost:8080/status`.
+- **Variables de prod (solo nombres):** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (`tracker_prod`), `DB_HOST`, `WEB_PORT` (8080), `CACHE_ENABLED` (`true`), `CACHE_HOST` (`cache`), `REDIS_PASSWORD`.
+- **Qué se ha hecho y cómo:**
+  - Plantilla `.env.prod.example` con valores ficticios y `.env.prod` real con contraseñas aleatorias propias. Se comprobó antes de versionar que la plantilla solo contenía los valores ficticios (la incidencia del paso 1.1 no se repitió) y que `.gitignore` (línea 4) ignora `.env.prod`.
+  - `docker-compose.prod.yml` con `name: randomlocke-prod` y tres servicios: `db` (PostgreSQL 16 con volumen y healthcheck, como en dev), `cache` (`redis:7-alpine`) y `web` (`build: ./app`, con `WEB_PORT`, las variables de la caché y `depends_on` con `service_healthy` sobre `db` y `cache`). Los tres con `restart: unless-stopped`.
+  - Redis arranca con `sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD" --save "" --appendonly no'`: contraseña por variable de entorno (el YAML no contiene valores), proceso principal con `exec` y **sin persistencia** (es una caché reconstruible). Su healthcheck usa `REDISCLI_AUTH` y `grep -q PONG`, no `redis-cli -a`.
+- **Verificación (observable):**
+  - `config --quiet` sin salida. Los tres servicios `healthy`; solo `web` publica puerto (`0.0.0.0:8080->8000/tcp`); `db` (`5432/tcp`) y `cache` (`6379/tcp`) no.
+  - Redis: con contraseña, `PONG`; sin ella, `(error) NOAUTH Authentication required.`; `config get save` devuelve una cadena vacía.
+  - `curl http://localhost:8080/status` → `{"db":"ok"}` con 200; `GET /` sirve la interfaz.
+  - La web creó el esquema en la BD de prod, que estaba vacía (`\dt` muestra `runs` y `encounters`): la decisión 5-B también funciona en prod.
+  - **Convivencia de los dos entornos:** `docker ps` muestra a la vez `randomlocke-dev-*` (puerto 8000) y `randomlocke-prod-*` (puerto 8080), con bases de datos independientes: `/runs` en prod devuelve `[]` mientras que en dev devuelve las partidas de prueba.
+- **Decisiones:**
+  - Dos ficheros de Compose independientes (decisión 6), aun con algo de duplicación: cada entorno se entiende sin abrir el otro.
+  - `name`, puerto, nombre de la BD y contraseñas propios en prod: no se pisan contenedores, red ni volúmenes (`randomlocke-prod_pgdata`), y las credenciales de un entorno no comprometen las del otro.
+  - `restart: unless-stopped` solo en prod. No reinicia contenedores `unhealthy`, solo los que terminan.
+  - Redis con contraseña aunque no publique puerto (defensa en profundidad: cualquier otro contenedor de la red podría usarlo) y sin persistencia.
+  - `build: ./app` en ambos entornos: Compose crea una imagen por proyecto (`randomlocke-dev-web`, `randomlocke-prod-web`).
+- **Tropiezos:** (1) el bloque `web` no se había guardado en disco; `up -d --build` no mostró ningún paso de construcción y `curl` dio `HTTP 000` (nada escuchando en el puerto). Se detectó con `grep -n -E "^  [a-z]+:"` sobre el fichero y se resolvió guardando. (2) Dev estaba parado cuando se dijo que los dos entornos aparecerían juntos; la convivencia se comprobó después, arrancando dev.
+- **Limitación conocida:** hasta el paso 3.3 la aplicación todavía no usa Redis; las variables de la caché llegan a `web` pero no tienen efecto.
+- **Justificación:** el entorno de producción añade el servicio de caché del enunciado (solo en prod) con las mismas medidas de seguridad que el resto: credenciales por variable de entorno, solo `web` expuesto y healthchecks en todos los contenedores.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar las diferencias entre dev y prod, la política de reinicio y la configuración segura de Redis; dar el compose por piezas, y revisar los ficheros del alumno y su verificación. Parte del trabajo: Fase 3, entorno de producción.
+- **Commit:** `feat(prod): add production compose with Redis and its own variables`

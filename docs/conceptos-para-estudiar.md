@@ -534,6 +534,18 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 
 ## 9. Caché
 
+### Dos entornos independientes: `name:`, puertos y variables propias (paso 3.1)
+- **Qué es:** producción tiene su propio `docker-compose.prod.yml` y su propio `.env.prod`, con un nombre de proyecto distinto (`name: randomlocke-prod`), otro puerto publicado (8080 frente al 8000 de dev), otro nombre de base de datos (`tracker_prod`) y **contraseñas distintas** a las de dev.
+- **Dónde y cómo se usa en mi proyecto:** como el nombre de proyecto prefija contenedores, red y volúmenes (`randomlocke-prod-db-1`, `randomlocke-prod_pgdata`...), dev y prod pueden convivir en la misma máquina sin pisarse: no comparten contenedores, red, volumen ni puerto. `.env.prod` está en el `.gitignore` y solo se versiona `.env.prod.example`, con valores ficticios.
+- **Por qué así:** el enunciado exige dos ficheros de orquestación separados y un `.env` por entorno. Reutilizar las mismas credenciales en dev y prod sería un riesgo: si se filtran las de uno, quedan comprometidas las del otro.
+- **Pregunta de defensa:** ¿qué pasaría si dev y prod usaran el mismo `name:` o el mismo puerto?
+
+### Redis: contraseña, healthcheck sin `-a` y caché sin persistencia (paso 3.1)
+- **Qué es:** Redis arranca con `--requirepass` y la contraseña viene de una variable de entorno (`REDIS_PASSWORD`), nunca escrita en el YAML. El comando usa `$$REDIS_PASSWORD` para que la resuelva la shell del contenedor y `exec` para que `redis-server` sea el proceso principal. Para el healthcheck se usa la variable `REDISCLI_AUTH` en lugar de `redis-cli -a`, porque `-a` imprime un aviso de que pasar la contraseña por la línea de comandos es inseguro. Se desactiva la persistencia (`--save "" --appendonly no`).
+- **Dónde y cómo se usa en mi proyecto:** servicio `cache` de `docker-compose.prod.yml`, sin `ports` (solo accesible por la red interna) y con healthcheck que comprueba que `redis-cli ping` responde `PONG`.
+- **Por qué así:** una caché es un almacén **temporal** y reconstruible desde la base de datos, así que no necesita escribir a disco; sin persistencia, reiniciar Redis simplemente vacía la caché. La contraseña evita que cualquier otro contenedor de la red lo use sin autorización.
+- **Pregunta de defensa:** ¿por qué una caché no necesita persistencia y por qué se protege con contraseña si no publica puerto?
+
 ### Redis y *cache-aside* (pendiente de ver en el paso 3.3)
 - **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.
 - **Dónde y cómo se usa en mi proyecto:** solo en prod (`cache`). Se cachea la lectura del equipo activo y se invalida al registrar un evento.

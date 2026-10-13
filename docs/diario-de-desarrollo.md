@@ -406,3 +406,39 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige demostrar una caché en prod. *Cache-aside* con invalidación tras el commit, degradación a PostgreSQL y estado visible en la UI cumplen el diseño de §6 de `idea-y-alcance.md` y la decisión 7.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar *cache-aside* y la invalidación, revisar el código del alumno, aplicar y verificar la pieza 5 (interfaz) a petición suya y ejecutar las pruebas de verificación. Parte del trabajo: Fase 3, caché.
 - **Commit:** `feat(cache): add cache-aside for active team with invalidation after commit`
+
+### [Paso 3.4: Makefile completo y verificación en limpio]
+- **Fecha:** 2026-10-13
+- **Archivos:** `Makefile` (variables `COMPOSE_DEV` y `COMPOSE_PROD`, doce targets por entorno y `down`), `docs/conceptos-para-estudiar.md`, `docs/diario-de-desarrollo.md`, `docs/resumenes/fase-3.md`.
+- **Comandos:** `make -n up-prod`, `make -n down-dev`, `make -n clean-prod`, `make -n down` (ensayo en seco), `make ps-dev`, `make ps-prod`; verificación en limpio: `git clone` en `RedesAvanzadas/prueba-limpia`, `cp .env.prod.example .env.prod` + `sed` (contraseñas aleatorias y `WEB_PORT=8081`), `COMPOSE_PROJECT_NAME=prueba-limpia make up-prod`, `... make ps-prod`, `curl /status`, `POST /runs`, dos `GET /runs/1/team`, `COMPOSE_PROJECT_NAME=prueba-limpia make clean-prod` y `rm -rf prueba-limpia`.
+- **Qué se ha hecho y cómo:** el Makefile pasa a tener targets por entorno (`build`, `up`, `down`, `ps`, `logs`, `clean`, cada uno con sufijo `-dev` o `-prod`) y `make down`, que baja los dos entornos conservando los datos. `clean` no tiene versión conjunta: `clean-dev` y `clean-prod` avisan, cada uno con su mensaje, antes de `down -v`. Después se clonó el repositorio desde GitHub en una carpeta nueva, sin ningún `.env` real, y se levantó prod desde las plantillas.
+- **Verificación (observable):**
+  - Clon sin `.env` reales: `make clean-prod` falló con «couldn't find env file» (prueba de que no viaja ningún secreto en el repo); tras crear `.env.prod` desde la plantilla, `make up-prod` creó imagen, redes `frontend` y `backend`, volumen y los tres contenedores.
+  - `db`, `cache` y `web` en `healthy`; solo `web` publica puerto (`0.0.0.0:8081->8000`); `/status` → `{"estado":"ok","db":"ok","cache":"ok"}`; crear partida y leer el equipo dos veces → `MISS` y `HIT`.
+  - Limpieza solo del proyecto de prueba, y el prod real (`randomlocke-prod`, puerto 8080) siguió `healthy` durante toda la prueba.
+- **Decisiones:** nombres de target por entorno para no confundir dev con prod; `make down` baja ambos (conserva volúmenes, decisión 8) pero `clean` nunca se junta, porque borra datos; la verificación se aisló con `COMPOSE_PROJECT_NAME=prueba-limpia` y el puerto 8081, para no reutilizar el volumen del prod real ni parar sus contenedores.
+- **Limitación honesta:** las capas de la imagen salieron `CACHED` (el Docker ya las tenía), así que no fue un *build* sin caché de Docker; sí fue un despliegue desde cero en cuanto a repositorio, `.env`, redes y volumen.
+- **Tropiezo:** se ejecutó el paso de limpieza antes de crear el `.env.prod` y falló sin consecuencias (no existía el fichero y, además, el nombre de proyecto lo aislaba del prod real).
+- **Justificación:** el enunciado pide automatizar con Make (`up-dev`, `up-prod`, `down`) y poder reproducir el despliegue desde una instalación limpia; los targets por entorno y la verificación en limpio lo demuestran.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: proponer la convención de targets, escribir el Makefile a petición del alumno, diseñar la verificación en limpio con aislamiento de proyecto y revisar sus resultados. Parte del trabajo: Fase 3, automatización y verificación.
+- **Commit:** `build: add per-environment make targets and down for both` (el Makefile) y `docs: close phase 3 with step 3.4 diary, concepts and summary`.
+
+### [Paso 4.1: revisión de seguridad]
+- **Fecha:** 2026-10-13
+- **Archivos:** `docker-compose.prod.yml` (`user: redis` en `cache`, `ENABLE_DOCS` en `web`), `docker-compose.dev.yml` (`ENABLE_DOCS` en `web`), `app/main.py` (`ENABLE_DOCS` y `docs_url`, `redoc_url`, `openapi_url` condicionales), `.env.dev.example`, `.env.prod.example` y los `.env` reales (solo se añadió el nombre `ENABLE_DOCS` con su valor).
+- **Comandos:** `git ls-files | grep -i -E "\.env|claude\.md|\.pdf|..."`, `git log --all --diff-filter=A --name-only`, `git check-ignore -v`, `git ls-files -z | xargs -0 grep -i -E "password|secret|token|api[_-]?key"`, `docker compose ... ps`, `docker ps --filter name=randomlocke-prod --format ...`, `docker top <contenedor>`, `docker exec <contenedor> grep -E "^(Uid|Gid):" /proc/1/status`, `curl -s -o /dev/null -w '%{http_code}' localhost:<puerto>/docs` (y `/redoc`, `/openapi.json`), `docker compose ... config --quiet`, `docker compose ... up -d --build`, `ls -l .env.dev .env.prod`.
+- **Revisión (resultado):**
+  - Solo las plantillas `.env.*.example` están versionadas, ahora y en todo el historial; `.env.dev`, `.env.prod`, `CLAUDE.md` y `Practica1.pdf` están ignorados.
+  - Sin credenciales en código ni YAML: solo `${VAR}`, `os.environ` y los valores ficticios `cambia_esto` de las plantillas.
+  - Solo `web` publica puerto (`8080` en prod); `db` y `cache` no.
+  - Procesos: `web` uid 10001 (sin root), `db` uid 999 (`postgres`); **`cache` corría como `root`**.
+  - **`/docs`, `/redoc` y `/openapi.json` respondían `200` en prod.**
+  - Permisos de los `.env`: `-rw-r--r--` (644).
+- **Correcciones aplicadas:**
+  - **Redis sin root:** `user: redis` en el servicio `cache`. La imagen oficial solo baja de privilegios si arranca `redis-server` directamente; nuestro `command: ["sh","-c","exec redis-server ..."]` (para leer la contraseña de la variable) se lo saltaba. Verificado: `docker inspect` → `redis`, proceso uid 999, contenedor `healthy`, `/status` `ok` y `MISS` → `HIT`.
+  - **Documentación interactiva desactivada en prod:** variable `ENABLE_DOCS` (por defecto `false`: seguro por defecto), `true` en dev y `false` en prod. Verificado: prod → `/docs`, `/redoc` y `/openapi.json` dan `404`; dev → `200`.
+- **Limitación aceptada y documentada:** los `.env` quedan en 644. WSL monta `C:\` (`drvfs`) sin la opción `metadata`, así que `chmod 600` no tiene efecto sobre NTFS. En un servidor Linux se aplicaría `chmod 600 .env.*`; se explicará con honestidad en el README. Alternativa más robusta descartada por el momento del proyecto: trabajar desde el sistema de ficheros de WSL.
+- **Decisiones:** seguro por defecto (sin la variable, no hay documentación); `ENABLE_DOCS` como variable y no «desactivar si hay caché», para no acoplar dos cosas distintas; `db` ya baja de privilegios por la imagen oficial.
+- **Justificación:** el enunciado pide credenciales fuera del código, puertos mínimos y permisos mínimos; la revisión lo comprueba con evidencia y reduce la superficie de ataque de prod (menos privilegios en Redis, API no autodocumentada).
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: diseñar y ejecutar la revisión, detectar Redis como root y la documentación expuesta, aplicar y verificar los arreglos a petición del alumno. Parte del trabajo: Fase 4, seguridad.
+- **Commit:** `chore(security): run redis as non-root and disable api docs in prod`

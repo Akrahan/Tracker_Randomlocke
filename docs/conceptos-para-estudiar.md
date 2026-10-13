@@ -84,7 +84,21 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Para qué se usa:** reducir el daño si alguien consigue ejecutar código dentro del contenedor.
 - **Dónde y cómo se usa en mi proyecto:** el `Dockerfile` de `web` crea el usuario `appuser` con `useradd --system --no-create-home --uid 10001 --shell /usr/sbin/nologin appuser` (usuario de sistema, sin carpeta personal, sin shell de inicio de sesión y con un UID alto y fijo) y cambia a él con `USER appuser` antes del arranque. El código se copia **sin** `--chown`, así que pertenece a `root` y `appuser` solo puede leerlo: la aplicación no puede modificar su propio código. Se comprueba con `docker run --rm <imagen> whoami`.
 - **Por qué así:** es una medida básica de seguridad que el enunciado recomienda.
+- **Ampliación (paso 4.1):** la revisión de seguridad encontró que **Redis corría como `root`**: la imagen oficial solo baja de privilegios si arranca `redis-server` directamente, y nuestro `command: ["sh","-c","exec redis-server ..."]` (necesario para leer la contraseña de la variable de entorno) se saltaba ese paso. Se arregló con `user: redis` en el servicio `cache`. Se comprueba con `docker top` o `docker inspect -f '{{.Config.User}}'` (no con `docker exec ... id`, porque `exec` entra como el usuario por defecto de la imagen, no necesariamente como el del proceso principal). Estado final: `web` uid 10001, `db` uid 999 (`postgres`), `cache` uid 999 (`redis`).
 - **Pregunta de defensa:** ¿qué ventaja de seguridad aporta no ejecutar como root?
+
+### Documentación interactiva desactivada en producción: `ENABLE_DOCS` (paso 4.1)
+- **Qué es:** FastAPI publica por defecto `/docs` (Swagger), `/redoc` y `/openapi.json`, que describen todos los endpoints. `ENABLE_DOCS` es una variable de entorno que decide si se publican.
+- **Para qué se usa:** reducir la superficie de ataque: en producción nadie necesita ver el mapa de la API.
+- **Dónde y cómo se usa en mi proyecto:** `app/main.py` lee `ENABLE_DOCS` (por defecto `false`) y pasa `docs_url`, `redoc_url` y `openapi_url` a `FastAPI(...)` (`None` los desactiva). `.env.dev` → `true`, `.env.prod` → `false`; ambos compose la pasan a `web`. Comprobado: prod → `404` en las tres rutas; dev → `200`.
+- **Por qué así:** *seguro por defecto* (si falta la variable, no hay documentación) y variable propia en vez de «desactivar si hay caché», para no acoplar dos decisiones distintas. Con `StaticFiles` montado en `/`, una ruta desactivada devuelve `404`.
+- **Pregunta de defensa:** ¿por qué desactivar `/docs` en producción y mantenerla en desarrollo?
+
+### Permisos mínimos en los `.env` y la limitación de NTFS (paso 4.1)
+- **Qué es:** el enunciado pide «permisos mínimos en los ficheros de configuración»: en Linux, `chmod 600 .env.*` (solo el propietario lee y escribe).
+- **Dónde y cómo se usa en mi proyecto:** los `.env` están en NTFS, montado en WSL (`drvfs`) sin la opción `metadata`, así que `chmod` no cambia nada (siguen `-rw-r--r--`). Compensaciones: los `.env` están en `.gitignore`, no hay credenciales en el repositorio y las credenciales de este proyecto no se reutilizan en ningún otro sitio.
+- **Por qué así:** cambiar el repositorio al sistema de ficheros de WSL lo habría arreglado, pero no compensaba a estas alturas. Se documenta con honestidad en el README; en un servidor Linux se aplicaría `chmod 600 .env.*`.
+- **Pregunta de defensa:** ¿qué permisos pondrías a un `.env` en un servidor y por qué no se aplican en tu máquina?
 
 ---
 
@@ -361,7 +375,8 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 ### Make y Makefile (paso 1.6)
 - **Qué es:** `make` ejecuta "atajos" (*targets*) definidos en un `Makefile`. Cada línea de comando debe empezar con un **tabulador**.
 - **Para qué se usa:** convertir comandos largos en uno corto y reproducible.
-- **Dónde y cómo se usa en mi proyecto:** `make build`, `make up-dev`, `make down`, `make ps` y `make logs` (y más adelante `make up-prod` y `make clean`). Una variable `COMPOSE_DEV = docker compose --env-file .env.dev -f docker-compose.dev.yml` guarda el comando base una sola vez y los targets la usan con `$(COMPOSE_DEV)`. Sustituye al `alias dc`, que se pierde al cerrar la terminal.
+- **Dónde y cómo se usa en mi proyecto (paso 3.4):** seis targets por entorno: `build-dev`, `up-dev`, `down-dev`, `ps-dev`, `logs-dev`, `clean-dev` y los mismos con `-prod`, más `make down`, que depende de `down-dev` y `down-prod` y baja los dos entornos conservando los datos. **`clean` nunca se junta**: borrar datos exige elegir entorno (`clean-dev` o `clean-prod`). Dos variables, `COMPOSE_DEV` y `COMPOSE_PROD` (`docker compose --env-file .env.<entorno> -f docker-compose.<entorno>.yml`), guardan el comando base una sola vez y los targets las usan con `$(COMPOSE_DEV)`. Sustituye al `alias dc`, que se pierde al cerrar la terminal.
+- **Por qué nombres por entorno (paso 3.4):** antes `down`, `ps` y `logs` solo hablaban de dev, lo que era ambiguo. Con `-dev`/`-prod` cada comando dice sobre qué entorno actúa. Alternativa descartada: un único `down` que baje solo dev (confuso) o sin `down` (el enunciado lo nombra).
 - **Por qué así:** lo exige el enunciado (Makefile o script). Un único sitio con el comando evita olvidar el `--env-file` o mezclar dev con prod. El nombre de proyecto ya lo fija `name:` en el compose, así que no se repite con `-p`.
 - **`.PHONY`:** marca los targets que son acciones y no ficheros. Sin él, si existiera un fichero llamado `build`, `make build` diría que ya está hecho y no ejecutaría nada.
 - **El tabulador:** si las líneas de comando empiezan con espacios, `make` falla con `*** missing separator. Stop.`. `.editorconfig` fuerza tabuladores en `[Makefile]`, pero solo si la extensión EditorConfig está activa. Se comprueba con `cat -A Makefile` (los tabuladores salen como `^I`).
@@ -369,6 +384,13 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **`make logs`:** usa `logs -f --tail=50`: sigue los logs en directo empezando por las últimas 50 líneas. Se queda esperando; se sale con Ctrl+C.
 - **Ensayo en seco:** `make -n up-dev` imprime el comando que ejecutaría sin ejecutarlo; es la forma segura de comprobar un Makefile.
 - **Pregunta de defensa:** ¿qué hace `make up-dev` por debajo, y por qué el Makefile exige tabuladores?
+
+### Verificación desde cero con un clon y `COMPOSE_PROJECT_NAME` (paso 3.4)
+- **Qué es:** probar que el proyecto funciona **sin ningún estado previo de tu máquina**: se clona el repositorio en una carpeta nueva, se crean los `.env` desde las plantillas `.example` y se levanta el entorno.
+- **Para qué se usa:** demostrar que el README y las plantillas bastan para reproducir el despliegue, y que no se depende de un fichero que solo existe en tu ordenador (por ejemplo un `.env` que nunca se subió).
+- **Dónde y cómo se usa en mi proyecto:** clon en `RedesAvanzadas/prueba-limpia` (fuera del proyecto), `.env.prod` creado con `cp` y `sed` con contraseñas aleatorias y `WEB_PORT=8081`, y `COMPOSE_PROJECT_NAME=prueba-limpia make up-prod`. Resultado: `db`, `cache` y `web` en `healthy`, `/status` con `ok`, y `MISS` → `HIT`. Después `COMPOSE_PROJECT_NAME=prueba-limpia make clean-prod` y borrar la carpeta.
+- **Por qué así:** el compose de prod fija `name: randomlocke-prod`, que decide el nombre de los contenedores, las redes y **el volumen** (`randomlocke-prod_pgdata`). Una copia con el mismo nombre habría reutilizado el volumen del prod real, con otra contraseña, y habría fallado. Con la variable de entorno `COMPOSE_PROJECT_NAME` (más prioritaria que `name:`; la más prioritaria es `-p`) la copia vive aislada y no hace falta parar el prod real; el puerto 8081 evita chocar con el 8080. Limitación honesta: las capas de la imagen salieron `CACHED` (el Docker ya las tenía), así que no fue un *build* sin caché.
+- **Pregunta de defensa:** ¿cómo demuestras que tu proyecto no depende de nada que solo exista en tu máquina?
 
 ---
 
@@ -652,19 +674,19 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** una variable global con la «última respuesta» fallaría con `Promise.all` (guardaría la última que termina, no la del equipo); devolver las cabeceras junto al cuerpo es explícito. Prueba real: prod muestra origen base de datos → caché → base de datos tras registrar un evento → «caché caída» con `docker compose stop cache`; dev muestra «base de datos» sin TTL (`X-Cache: OFF`).
 - **Pregunta de defensa:** ¿por qué la interfaz distingue «caché caída» de «BD caída»?
 
-### Redis y *cache-aside* (pendiente de ver en el paso 3.3)
+### Redis y *cache-aside* (paso 3.3, implementado)
 - **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.
 - **Dónde y cómo se usa en mi proyecto:** solo en prod (`cache`). Se cachea la lectura del equipo activo y se invalida al registrar un evento.
 - **Por qué así:** el enunciado exige demostrar su uso. La invalidación se hace **después del `COMMIT`**: si fuera antes, una lectura intermedia podría volver a cachear el estado antiguo. A esta escala el beneficio es sobre todo pedagógico.
 - **Pregunta de defensa:** ¿por qué se invalida la caché después del commit y no antes?
 
-### TTL (pendiente de ver en el paso 3.3)
+### TTL (paso 3.3, implementado: 30 s, comprobado con un `INSERT` directo en la BD)
 - **Qué es:** *time to live*: los segundos que un dato permanece en la caché antes de caducar.
 - **Dónde y cómo se usa en mi proyecto:** cada entrada del equipo activo lleva un TTL; la UI muestra el TTL restante.
 - **Por qué así:** actúa como red de seguridad si una invalidación falla: el dato antiguo desaparece solo.
 - **Pregunta de defensa:** ¿qué aporta el TTL si ya invalidas la caché al escribir?
 
-### Degradación elegante (pendiente de ver en el paso 3.3)
+### Degradación elegante (paso 3.3, implementado: `DEGRADED` y círculo rojo en la caché)
 - **Qué es:** si un servicio no crítico falla, la aplicación sigue funcionando con menos prestaciones.
 - **Dónde y cómo se usa en mi proyecto:** si Redis cae, la app consulta Postgres directamente y `/status` indica `degraded`.
 - **Por qué así:** la caché es opcional y la BD es imprescindible.

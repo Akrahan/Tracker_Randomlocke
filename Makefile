@@ -1,22 +1,46 @@
-COMPOSE_DEV = docker compose --env-file .env.dev -f docker-compose.dev.yml
+COMPOSE_DEV  = docker compose --env-file .env.dev  -f docker-compose.dev.yml
+COMPOSE_PROD = docker compose --env-file .env.prod -f docker-compose.prod.yml
 
-.PHONY: build up-dev down ps logs clean
+.PHONY: build-dev up-dev down-dev ps-dev logs-dev clean-dev \
+        build-prod up-prod down-prod ps-prod logs-prod clean-prod
 
-build:
+build-dev:
 	$(COMPOSE_DEV) build
 
 up-dev:
 	$(COMPOSE_DEV) up -d --build
 
-down:
+down-dev:
 	$(COMPOSE_DEV) down
 
-ps:
+ps-dev:
 	$(COMPOSE_DEV) ps
 
-logs:
+logs-dev:
 	$(COMPOSE_DEV) logs -f --tail=50
 
-clean:
-	@echo "Se eliminan contenedores, red y VOLUMENES (los datos de la base de datos)."
+clean-dev:
+	@echo "Se eliminan contenedores, red y VOLUMENES de DEV (los datos de la base de datos)."
 	$(COMPOSE_DEV) down -v
+
+build-prod:
+	$(COMPOSE_PROD) build
+
+up-prod:
+	$(COMPOSE_PROD) up -d --build
+
+down-prod:
+	$(COMPOSE_PROD) down
+
+ps-prod:
+	$(COMPOSE_PROD) ps
+
+logs-prod:
+	$(COMPOSE_PROD) logs -f --tail=50
+
+clean-prod:
+	@echo "Se eliminan contenedores, red y VOLUMENES de PROD (todas las partidas y eventos)."
+	$(COMPOSE_PROD) down -v
+
+.PHONY: down
+down: down-dev down-prod

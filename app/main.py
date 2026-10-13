@@ -24,6 +24,7 @@ DB_NAME = os.environ["POSTGRES_DB"]
 CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "false").lower() == "true"
 CACHE_HOST = os.environ.get("CACHE_HOST", "cache")
 CACHE_PASSWORD = os.environ.get("REDIS_PASSWORD")
+ENABLE_DOCS = os.environ.get("ENABLE_DOCS", "false").lower() == "true"
 
 cache = (
     redis.Redis(
@@ -162,7 +163,13 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Tracker Randomlocke", lifespan=lifespan)
+app = FastAPI(
+    title="Tracker Randomlocke",
+    lifespan=lifespan,
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
+)
 
 
 @app.get("/status")

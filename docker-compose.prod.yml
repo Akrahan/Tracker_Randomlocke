@@ -22,6 +22,7 @@ services:
   cache:
     image: redis:7-alpine
     restart: unless-stopped
+    user: redis
     networks:
       - backend
     environment:
@@ -49,6 +50,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       CACHE_ENABLED: ${CACHE_ENABLED}
       CACHE_HOST: ${CACHE_HOST}
+      ENABLE_DOCS: ${ENABLE_DOCS}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       db:

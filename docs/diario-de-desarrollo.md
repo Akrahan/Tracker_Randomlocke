@@ -353,3 +353,24 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el entorno de producción añade el servicio de caché del enunciado (solo en prod) con las mismas medidas de seguridad que el resto: credenciales por variable de entorno, solo `web` expuesto y healthchecks en todos los contenedores.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar las diferencias entre dev y prod, la política de reinicio y la configuración segura de Redis; dar el compose por piezas, y revisar los ficheros del alumno y su verificación. Parte del trabajo: Fase 3, entorno de producción.
 - **Commit:** `feat(prod): add production compose with Redis and its own variables`
+
+### [Paso 3.2: aislamiento de red]
+- **Fecha:** 2026-10-13
+- **Archivos:** `docker-compose.prod.yml` (claves `networks:` de `db`, `cache` y `web`, y bloque `networks:` final)
+- **Comandos:** `grep -n -E "^networks:|^  frontend:|^  backend:|internal:|^      - (frontend|backend)$|^    networks:" docker-compose.prod.yml`, `docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet`, `... down`, `... up -d`, `... ps`, `docker network ls | grep randomlocke-prod`, `docker network inspect randomlocke-prod_backend -f '{{.Internal}}'`, `docker network inspect <red> -f '{{range .Containers}}{{.Name}} {{end}}'`, `... exec cache sh -c 'wget -q -T 3 -O- http://example.com ...'`, `... exec web python -c "import urllib.request; urllib.request.urlopen('http://example.com', timeout=3)"`, `curl http://localhost:8080/status`, `... exec web python -c "import socket; socket.create_connection(('cache', 6379), timeout=3)"`.
+- **Qué se ha hecho y cómo:** se definieron dos redes: `frontend` (normal) y `backend` (`internal: true`). `db` y `cache` solo están en `backend`; `web` está en las dos y actúa de puente. Se bajó prod con `down` (conserva volúmenes) y se recreó con `up -d`: Compose creó `randomlocke-prod_backend` y `randomlocke-prod_frontend`.
+- **Verificación (observable):**
+  - `docker network inspect randomlocke-prod_backend -f '{{.Internal}}'` → `true`. `backend` contiene `web`, `cache` y `db`; `frontend`, solo `web`.
+  - Desde `cache`: `wget: bad address 'example.com'` → «sin salida a internet». Desde `web`: «web SI sale a internet».
+  - `/status` → `{"db":"ok"}` con 200 y `web` abre una conexión a `cache:6379` («web alcanza cache»).
+  - Los tres contenedores `healthy`; solo `web` publica puerto (`0.0.0.0:8080->8000/tcp`).
+  - **Efecto de `restart: unless-stopped` tras apagar el ordenador:** al volver, los contenedores de prod seguían `Up (healthy)` mientras los de dev estaban `Exited (255)`.
+- **Decisiones:**
+  - Una red `internal: true` no permite publicar puertos ni salir al exterior; por eso `web` está en dos redes (publica por `frontend` y habla con `db` y `cache` por `backend`).
+  - Endurecimiento solo en prod. En dev (solo `web` y `db`) se mantiene la red por defecto, que ya cumple «una red interna donde se comunican»; replicarlo allí es opcional.
+  - `db` y `cache` sin salida a internet: aplicar el mínimo privilegio a la red. Un `docker pull` no se ve afectado, porque lo hace el demonio de Docker en el host y no el contenedor.
+- **Detalle:** `randomlocke-prod_default` (la red antigua) quedó huérfana, porque `down` solo borra las redes definidas en el fichero actual. Está vacía y es inofensiva; se puede quitar con `docker network rm randomlocke-prod_default`.
+- **Limitación conocida:** `web` está en las dos redes, así que es la pieza más delicada: comprometerla da acceso a `db`, `cache` e internet. Mitigaciones ya aplicadas: usuario sin root, código de solo lectura y credenciales solo por variables de entorno. Endurecimientos posibles fuera de alcance: `read_only: true` y `cap_drop` en `web`.
+- **Justificación:** el enunciado exige que solo la aplicación web pueda exponerse y que los demás servicios sean accesibles únicamente desde la red interna; las dos redes lo garantizan estructuralmente, además de no publicar sus puertos.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar las redes `internal`, proponer la topología de dos redes y revisar las pruebas de aislamiento del alumno. Parte del trabajo: Fase 3, aislamiento de red.
+- **Commit:** `feat(prod): isolate db and cache in an internal network`

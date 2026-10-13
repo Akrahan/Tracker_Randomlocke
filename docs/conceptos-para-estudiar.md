@@ -251,6 +251,16 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** el enunciado lo exige y reduce la superficie de ataque. Los contenedores se hablan por la red interna sin publicar nada.
 - **Pregunta de defensa:** ¿qué ocurre si publicas el puerto de la base de datos?
 
+### Dos redes: `frontend` y `backend` con `internal: true` (paso 3.2)
+- **Qué es:** una red de Docker marcada `internal: true` no tiene salida al exterior: los contenedores que están **solo** en ella no pueden alcanzar internet ni ser alcanzados desde el host, y no se pueden publicar puertos desde ella. En prod hay dos redes: `frontend` (normal) y `backend` (interna). `web` está en las **dos**; `db` y `cache`, solo en `backend`.
+- **Para qué se usa:** aplicar el principio de mínimo privilegio a la red: la base de datos y la caché solo necesitan hablar con `web`. Si alguien comprometiera `db` o `cache`, no podrían salir a internet ni descargar herramientas o exfiltrar datos.
+- **Dónde y cómo se usa en mi proyecto:** en `docker-compose.prod.yml`, cada servicio declara `networks:`; `web` lista `frontend` y `backend`, y `db` y `cache` solo `backend`. Compose crea `randomlocke-prod_frontend` y `randomlocke-prod_backend` y ya no usa la red `default`.
+- **Por qué `web` está en las dos:** publicar un puerto necesita una red con conectividad externa (por eso no puede estar **solo** en `backend`), y a la vez necesita hablar con `db` y `cache` (que solo están en `backend`). Es el único puente entre el exterior y el interior.
+- **Pruebas reales:** `docker network inspect randomlocke-prod_backend -f '{{.Internal}}'` → `true`; `backend` contiene `web`, `cache` y `db`, y `frontend` solo `web`; desde `cache`, `wget` falla con `bad address 'example.com'` («sin salida a internet», ni siquiera resuelve nombres externos); desde `web`, una petición a `example.com` funciona; `/status` da `{"db":"ok"}` (`web` llega a `db`) y `web` abre una conexión al puerto 6379 de `cache`.
+- **Detalle práctico:** al pasar de la red `default` a las dos redes, la red antigua `randomlocke-prod_default` queda **huérfana**: `docker compose down` solo elimina las redes que el fichero actual define, y `default` ya no está. Está vacía y es inofensiva; se elimina con `docker network rm randomlocke-prod_default`.
+- **`web` es el puente y, por tanto, la pieza más delicada:** comprometer `web` da acceso a `db`, `cache` y a internet; comprometer solo `db` o `cache` no da salida a internet. Por eso `web` va sin root, con el código de solo lectura y sin credenciales en el código. Endurecimientos posibles, fuera de alcance: `read_only: true` y `cap_drop` en `web`.
+- **Pregunta de defensa:** ¿por qué `web` está en dos redes y por qué `db` y `cache` están en una red interna?
+
 ### Red interna de Docker
 - **Qué es:** una red virtual donde los contenedores del mismo Compose se comunican por el nombre de su servicio.
 - **Dónde y cómo se usa en mi proyecto:** `web`, `db` y `cache` comparten red. En prod se valorará una segunda red `internal: true` para `db` y `cache` (paso 3.2).
@@ -533,6 +543,12 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 ---
 
 ## 9. Caché
+
+### Por qué existen dos entornos: desarrollo y producción (paso 3.1)
+- **Qué es:** *desarrollo* (dev) es el entorno donde se construye y se prueba, y donde equivocarse es barato; *producción* (prod) es el entorno que usan las personas de verdad, donde las equivocaciones tienen coste y se prioriza la estabilidad, la seguridad y el rendimiento. Se mantienen separados para que lo que se prueba nunca ponga en riesgo lo que se usa.
+- **Qué los diferencia en mi proyecto:** dev tiene `web` y `db`, sin caché, con el puerto 8000 y reglas para ver los fallos (no se reinicia solo); prod añade la **caché Redis** con contraseña, el puerto 8080, `restart: unless-stopped` y credenciales propias. El código de la aplicación y la imagen se construyen igual en los dos (mismo `Dockerfile`): lo que cambia es la **configuración**, no el programa.
+- **Por qué así:** (1) **Seguridad**: las credenciales de dev (que están en más sitios y manos) no dan acceso a prod. (2) **Datos**: probar, borrar o llenar de datos basura en dev no toca los datos reales (BD y volumen distintos). (3) **Fidelidad**: la caché solo existe en prod, así que su comportamiento hay que probarlo en un entorno que se le parezca. (4) **Reproducibilidad**: el mismo proyecto se despliega de dos formas con un comando (`make up-dev` o `make up-prod`). Es el principio de la práctica: desplegar un servicio en **entornos diferenciados**.
+- **Pregunta de defensa:** ¿qué ventajas tiene separar dev y prod y qué diferencias hay entre los dos en tu práctica?
 
 ### Dos entornos independientes: `name:`, puertos y variables propias (paso 3.1)
 - **Qué es:** producción tiene su propio `docker-compose.prod.yml` y su propio `.env.prod`, con un nombre de proyecto distinto (`name: randomlocke-prod`), otro puerto publicado (8080 frente al 8000 de dev), otro nombre de base de datos (`tracker_prod`) y **contraseñas distintas** a las de dev.

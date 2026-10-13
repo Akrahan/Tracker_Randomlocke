@@ -4,6 +4,8 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    networks:
+      - backend
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -20,6 +22,8 @@ services:
   cache:
     image: redis:7-alpine
     restart: unless-stopped
+    networks:
+      - backend
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --save \"\" --appendonly no"]
@@ -33,6 +37,9 @@ services:
   web:
     build: ./app
     restart: unless-stopped
+    networks:
+      - frontend
+      - backend
     ports:
       - "${WEB_PORT}:8000"
     environment:
@@ -57,3 +64,8 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  frontend:
+  backend:
+    internal: true

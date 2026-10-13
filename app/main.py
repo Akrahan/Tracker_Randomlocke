@@ -1,20 +1,46 @@
+import json
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
 import psycopg
+import redis
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 
 
 DB_HOST = os.environ["DB_HOST"]
 DB_USER = os.environ["POSTGRES_USER"]
 DB_PASSWORD = os.environ["POSTGRES_PASSWORD"]
 DB_NAME = os.environ["POSTGRES_DB"]
+CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "false").lower() == "true"
+CACHE_HOST = os.environ.get("CACHE_HOST", "cache")
+CACHE_PASSWORD = os.environ.get("REDIS_PASSWORD")
+
+cache = (
+    redis.Redis(
+        host=CACHE_HOST,
+        password=CACHE_PASSWORD,
+        socket_connect_timeout=1,
+        socket_timeout=1,
+        retry=Retry(NoBackoff(), 0),
+        decode_responses=True,
+    )
+    if CACHE_ENABLED
+    else None
+)
+
+CACHE_VIGILANCIA_S = 3
+CACHE_TTL_S = 30
+cache_estado = "ok" if CACHE_ENABLED else "no aplica"
 
 SCHEMA = Path(__file__).with_name("schema.sql")
 
@@ -52,14 +78,87 @@ def comprobar_db() -> bool:
         return False
 
 
+def vigilar_cache() -> None:
+    global cache_estado
+    while True:
+        try:
+            cache.ping()
+            cache_estado = "ok"
+        except redis.RedisError:
+            cache_estado = "caida"
+        time.sleep(CACHE_VIGILANCIA_S)
+
+
+def marcar_cache_caida() -> None:
+    global cache_estado
+    cache_estado = "caida"
+
+
+def comprobar_cache() -> str:
+    return cache_estado
+
+
 def existe_run(conn, run_id: int) -> None:
     if conn.execute("SELECT 1 FROM runs WHERE id = %s", (run_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="La partida no existe")
 
 
+def leer_equipo(run_id: int):
+    clave = f"team:{run_id}"
+    estado = "OFF"
+
+    if cache is not None:
+        if cache_estado != "ok":
+            estado = "DEGRADED"
+        else:
+            try:
+                crudo = cache.get(clave)
+                if crudo is not None:
+                    return json.loads(crudo), "HIT", cache.ttl(clave)
+                estado = "MISS"
+            except redis.RedisError:
+                marcar_cache_caida()
+                estado = "DEGRADED"
+
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        datos = jsonable_encoder(
+            conn.execute(
+                "SELECT c.route, c.species, c.created_at "
+                "FROM encounters c "
+                "WHERE c.run_id = %s AND c.event_type = 'captura' "
+                "AND NOT EXISTS (SELECT 1 FROM encounters m "
+                "WHERE m.run_id = c.run_id AND m.route = c.route AND m.event_type = 'muerte') "
+                "ORDER BY c.created_at",
+                (run_id,),
+            ).fetchall()
+        )
+
+    ttl = None
+    if estado == "MISS":
+        try:
+            cache.set(clave, json.dumps(datos), ex=CACHE_TTL_S)
+            ttl = CACHE_TTL_S
+        except redis.RedisError:
+            marcar_cache_caida()
+            estado = "DEGRADED"
+
+    return datos, estado, ttl
+
+
+def invalidar_equipo(run_id: int) -> None:
+    if cache is None:
+        return
+    try:
+        cache.delete(f"team:{run_id}")
+    except redis.RedisError:
+        marcar_cache_caida()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     inicializar_db()
+    if cache is not None:
+        threading.Thread(target=vigilar_cache, daemon=True).start()
     yield
 
 
@@ -69,9 +168,15 @@ app = FastAPI(title="Tracker Randomlocke", lifespan=lifespan)
 @app.get("/status")
 def status(response: Response):
     db_ok = comprobar_db()
+    cache_estado = comprobar_cache()
     if not db_ok:
         response.status_code = 503
-    return {"db": "ok" if db_ok else "down"}
+        estado = "down"
+    elif cache_estado == "caida":
+        estado = "degraded"
+    else:
+        estado = "ok"
+    return {"estado": estado, "db": "ok" if db_ok else "down", "cache": cache_estado}
 
 
 class RunNueva(BaseModel):
@@ -118,7 +223,7 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
             raise HTTPException(status_code=409, detail="El Pokémon de esa ruta ya murió")
 
         try:
-            return conn.execute(
+            fila = conn.execute(
                 "INSERT INTO encounters (run_id, event_type, route, species) "
                 "VALUES (%s, %s, %s, %s) "
                 "RETURNING id, run_id, event_type, route, species, created_at",
@@ -126,6 +231,9 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
             ).fetchone()
         except psycopg.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail="Evento duplicado")
+
+    invalidar_equipo(run_id)
+    return fila
 
 
 @app.get("/runs")
@@ -148,18 +256,14 @@ def listar_eventos(run_id: int):
 
 
 @app.get("/runs/{run_id}/team")
-def equipo_activo(run_id: int):
-    with conectar() as conn:
-        existe_run(conn, run_id)
-        return conn.execute(
-            "SELECT c.route, c.species, c.created_at "
-            "FROM encounters c "
-            "WHERE c.run_id = %s AND c.event_type = 'captura' "
-            "AND NOT EXISTS (SELECT 1 FROM encounters m "
-            "WHERE m.run_id = c.run_id AND m.route = c.route AND m.event_type = 'muerte') "
-            "ORDER BY c.created_at",
-            (run_id,),
-        ).fetchall()
+def equipo_activo(run_id: int, response: Response):
+    inicio = time.perf_counter()
+    datos, estado, ttl = leer_equipo(run_id)
+    response.headers["X-Cache"] = estado
+    if ttl is not None and ttl >= 0:
+        response.headers["X-Cache-TTL"] = str(ttl)
+    response.headers["X-Latency-Ms"] = f"{(time.perf_counter() - inicio) * 1000:.1f}"
+    return datos
 
 
 @app.get("/runs/{run_id}/graveyard")

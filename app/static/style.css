@@ -68,5 +68,8 @@ ul { padding-left: 20px; margin: 4px 0; }
 .punto.ok { background: var(--ok); }
 .punto.caido { background: var(--caido); }
 .punto.desconocido { background: var(--desconocido); }
+#estado-cache { margin-left: 10px; }
 
 #mensaje { min-height: 1.2em; color: var(--caido); margin: 4px 0 0; }
+
+.info { font-size: 0.8rem; color: var(--desconocido); margin: 0 0 6px; }

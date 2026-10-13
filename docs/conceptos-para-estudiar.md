@@ -579,6 +579,79 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** una caché es un almacén **temporal** y reconstruible desde la base de datos, así que no necesita escribir a disco; sin persistencia, reiniciar Redis simplemente vacía la caché. La contraseña evita que cualquier otro contenedor de la red lo use sin autorización.
 - **Pregunta de defensa:** ¿por qué una caché no necesita persistencia y por qué se protege con contraseña si no publica puerto?
 
+### Conectar la aplicación a Redis y degradar con elegancia (paso 3.3, pieza 1)
+- **Qué es:** `main.py` crea un cliente de Redis (`redis==8.1.0`) solo si `CACHE_ENABLED=true`; si no, `cache` vale `None` y la aplicación funciona sin caché (dev). Se configura con `socket_connect_timeout=1` y `socket_timeout=1`: si Redis no responde, la llamada **falla en 1 segundo** en lugar de colgar la web. `comprobar_cache()` devuelve `no aplica`, `ok` o `caida` y `/status` lo incluye.
+- **Dónde y cómo se usa en mi proyecto:** `/status` devuelve `{"estado": ..., "db": ..., "cache": ...}`. **Decisión 7:** BD caída → `503` y `estado: down`; caché caída con BD bien → `200` y `estado: degraded`; todo bien → `200` y `estado: ok`. El campo `db` se mantiene para no romper `app.js`.
+- **Por qué `CACHE_ENABLED` tiene un valor por defecto y las credenciales de la BD no:** la caché es **opcional**, así que, si no se configura, lo seguro es que esté apagada; la BD es **imprescindible**, y su configuración ausente debe hacer fallar el arranque (*fail fast*).
+- **Por qué `web` sigue `healthy` con Redis caído:** el healthcheck consulta `/status` y espera un `2xx`; con la caché caída recibe `200`. Solo la BD caída (`503`) lo marca `unhealthy`: distingue un servicio crítico de uno opcional.
+- **Problema real encontrado al probarlo (y su solución):** con la caché parada, `web` pasaba a `unhealthy` y `/status` tardaba más de 30 s. Dos causas: (1) `redis-py` **reintenta por defecto** con espera creciente (con tres reintentos, una caída costaba ~4 s o mucho más); (2) los `timeout` del cliente **no cubren la resolución DNS**, y en Docker Desktop resolver el nombre de un contenedor parado tarda **entre 3 y 8 s** (medido dentro de `web`), antes incluso de intentar conectar. Un simple temporizador de reintento tampoco bastaba: la primera petición de cada ventana pagaba esos segundos y, de vez en cuando, era la del healthcheck (un chequeo de cada dos fallaba).
+- **Solución adoptada:** (a) `retry=Retry(NoBackoff(), 0)`: sin reintentos, un fallo es un fallo; (b) **un hilo vigilante** (`vigilar_cache`, lanzado en el `lifespan`) hace `ping` a Redis cada 3 s y guarda el resultado en la variable `cache_estado`; `/status` y las lecturas **solo miran esa variable**, así que ninguna petición de usuario espera nunca a Redis para saber si está vivo. Estado inicial optimista (`ok`) hasta el primer `ping`; si una operación real falla, `marcar_cache_caida()` lo marca al instante.
+- **Prueba real tras el arreglo:** con la caché parada, `/status` responde `degraded` con `200` en ~12 ms; `web` sigue `healthy` (5 chequeos consecutivos con `exit=0`); al arrancar la caché, `/status` vuelve a `ok` en ~7 s. Contraste: con la BD parada, `503` y `down`.
+- **Por qué un hilo y no un *circuit breaker* simple:** el hilo saca la espera del camino de las peticiones; el temporizador solo la limita, pero alguien la paga.
+- **Pregunta de defensa:** ¿por qué una caché caída da `200 degraded` y una BD caída da `503`, por qué hay un hilo que vigila Redis en vez de hacer `ping` en cada petición y qué ocurre con `web` si Redis cae?
+
+### El problema de la caché explicado con una analogía: el camarero y el ayudante (paso 3.3)
+- **La historia, sin tecnicismos:** la web es un **camarero**; Redis, su **libreta de notas rápidas**; PostgreSQL, el **archivo**. Antes de cada cosa que hacía, el camarero comprobaba que la libreta seguía ahí. Cuando paramos Redis, esa comprobación tardaba muchísimo en contestarse (como llamar a un teléfono que nadie coge y quedarte esperando), y mientras tanto toda la web iba lenta y Docker la daba por «enferma» (`unhealthy`), por culpa de algo que era **opcional**.
+- **Por qué tardaba:** (1) la librería de Redis **insistía** con varios reintentos y esperas crecientes; (2) antes de llamar a Redis hay que preguntar a la «guía telefónica» de Docker (el DNS) dónde está `cache`, y cuando el contenedor está parado esa guía tarda **3-8 s** en decir «no existe»; esa espera ocurre **antes** de que empiecen a contar los timeouts de Redis.
+- **La solución, con la misma analogía:** un **ayudante** (un hilo en segundo plano, `vigilar_cache()`) llama a Redis cada 3 s y apunta en una **pizarra** (`cache_estado`) «ok» o «caída». El camarero (`/status` y las lecturas) **solo mira la pizarra**: tarda milisegundos. Si Redis se cae, quien espera es el ayudante, que no atiende a nadie. Además, se le dice a la librería que no reintente.
+- **Quién es quién:**
+
+| Pieza | En la analogía | Qué es en el proyecto |
+|---|---|---|
+| `web` | El camarero | El contenedor FastAPI |
+| Redis (`cache`) | La libreta de notas rápidas | Un contenedor propio con la imagen `redis:7-alpine` |
+| PostgreSQL (`db`) | El archivo | El contenedor de la base de datos |
+| `redis-py` | El teléfono para hablar con la libreta | La librería `import redis` |
+| El DNS de Docker | La guía telefónica | Traduce `cache` a la dirección del contenedor (lento si está parado) |
+| `vigilar_cache()` | El ayudante | Un hilo que hace `ping` cada 3 s |
+| `cache_estado` | La pizarra | Una variable global: `"ok"` o `"caida"` |
+| `/status` | El camarero leyendo la pizarra | Endpoint que lee la variable y comprueba la BD |
+| El healthcheck | El vigilante de Docker | Pregunta a `/status` cada 10 s con un máximo de 3 s |
+
+- **La lección:** *un servicio opcional que falla no debe hacer lento ni inestable a uno imprescindible.* Antes, sin querer, una cosa opcional rompía una importante; ahora no.
+- **Frase para la defensa:** «Probé a parar Redis y vi que la web se marcaba como no saludable; medí que la resolución DNS de un contenedor parado tarda entre 3 y 8 segundos, así que moví la comprobación a un hilo en segundo plano para que ninguna petición espere a Redis».
+- **Pregunta de defensa:** si el hilo vigilante muriera, ¿qué diría la pizarra y qué consecuencia tendría?
+
+### Redis: un contenedor propio que guarda claves y valores (paso 3.3)
+- **Qué es:** Redis es una base de datos **en memoria** que funciona como un diccionario gigante de pares `clave → valor`. En el proyecto es el servicio `cache` del compose de prod: contenedor `randomlocke-prod-cache-1`, imagen oficial `redis:7-alpine`, puerto `6379` sin publicar, **sin volumen** (al reiniciar se vacía, a propósito) y solo en la red `backend`.
+- **Qué almacena realmente:** copias de respuestas ya calculadas. Hasta la pieza 1 no guardaba nada (`dbsize` = 0; la web solo le hace `ping`). Desde la pieza 2 guardará, por cada partida, la **lista de Pokémon vivos** como texto JSON, por ejemplo la clave `team:4` con el valor `[{"route":"Ruta Persistencia","species":"Eevee","created_at":"..."}]`, con una caducidad (TTL) de 30 s.
+- **Las cuatro órdenes que lo resumen todo** (con `redis-cli` dentro del contenedor, con la contraseña en `REDISCLI_AUTH`):
+
+| Orden | Para qué | En Python (`redis-py`) |
+|---|---|---|
+| `SET team:4 "<json>" EX 30` | Guardar un valor que caduca en 30 s | `cache.set("team:4", texto_json, ex=30)` |
+| `GET team:4` | Leerlo: devuelve el valor (HIT) o `(nil)` (MISS) | `cache.get("team:4")` (texto o `None`) |
+| `TTL team:4` | Cuántos segundos le quedan | `cache.ttl("team:4")` |
+| `DEL team:4` | Borrarlo (invalidar) | `cache.delete("team:4")` |
+
+- **Frase clave:** Redis es un contenedor aparte que guarda copias temporales de respuestas ya calculadas, como `team:4`, para no volver a preguntar a PostgreSQL mientras no cambie nada.
+- **Pregunta de defensa:** ¿qué almacena Redis en tu proyecto, por qué no tiene volumen y qué debe hacer la web cuando `GET` devuelve `(nil)`?
+
+### Lectura *cache-aside* del equipo: HIT, MISS, TTL y cabeceras (paso 3.3, pieza 2)
+- **Qué es:** *cache-aside* (la caché «a un lado») significa que **la aplicación** decide cuándo usar la caché. `leer_equipo(run_id)`: (1) pregunta a Redis por la clave `team:<id>`; (2) si la encuentra (**HIT**), devuelve ese JSON sin tocar PostgreSQL; (3) si no (**MISS**, `GET` devuelve `(nil)`), ejecuta la consulta en PostgreSQL, guarda el resultado en Redis con `SET ... EX 30` y responde. Los datos se guardan como texto JSON (`json.dumps`) tras convertirlos con `jsonable_encoder` (las fechas pasan a texto), de modo que HIT y MISS devuelven exactamente lo mismo.
+- **Estados que devuelve la función** (se exponen en la cabecera `X-Cache`): `HIT` (sirvió Redis), `MISS` (consultó la BD y guardó), `OFF` (la caché está desactivada, como en dev) y `DEGRADED` (la caché está caída: sirvió PostgreSQL sin intentar guardar). Otras cabeceras: `X-Cache-TTL` (segundos que le quedan al valor) y `X-Latency-Ms` (lo que tardó la función). Se usan **cabeceras HTTP** y no se cambia el cuerpo, para que `/runs/{id}/team` siga devolviendo la misma lista y la interfaz no se rompa.
+- **TTL (30 s):** red de seguridad. Si una invalidación fallara, el dato antiguo desaparecería solo.
+- **Degradación:** si `cache_estado` no es `ok` o Redis falla durante la operación (`RedisError`), se llama a `marcar_cache_caida()` y se sirve desde PostgreSQL; la respuesta es correcta, solo más lenta.
+- **Prueba real (partida de prueba en prod):** primera lectura → `X-Cache: MISS`, `X-Cache-TTL: 30`, **12,0 ms**; segunda lectura → `X-Cache: HIT`, **0,8 ms** (unas 15 veces más rápida), con el mismo cuerpo; en Redis, `GET team:2` devuelve el JSON y `TTL` va bajando (29). Un `GET` a una partida inexistente da `404` y **no se cachea** el error (solo existe la clave `team:2`). Con la caché parada, las lecturas responden `X-Cache: DEGRADED` en ~11-12 ms con los **mismos datos correctos** (desde PostgreSQL), y al arrancarla la primera lectura es `MISS` y la siguiente `HIT`.
+- **Limitación a propósito hasta la pieza 3 (comprobada):** tras registrar otra captura, la lectura siguiente devolvió `HIT` con **solo el primer Pokémon** (dato desactualizado, con `X-Cache-TTL: 29`); no apareció el nuevo hasta que caducó el TTL, momento en que la lectura fue `MISS` con los dos. Es justo lo que resuelve la invalidación tras el `COMMIT`.
+- **Pregunta de defensa:** ¿qué hace la web cuando `GET team:4` devuelve `(nil)`, y qué indican las cabeceras `X-Cache`, `X-Cache-TTL` y `X-Latency-Ms`?
+
+### Invalidar la caché después del `COMMIT` (paso 3.3, pieza 3)
+- **Qué es:** al registrar un evento el equipo cambia, así que `invalidar_equipo(run_id)` ejecuta `DEL team:<id>` en Redis para que la siguiente lectura sea un MISS que recoja el dato nuevo. Si Redis falla al borrar, no rompe el registro: se marca la caché como caída y el TTL (30 s) limpiará el dato viejo.
+- **Por qué *después* del `COMMIT`:** en `registrar_evento`, `invalidar_equipo` y el `return` están **fuera** del `with conectar() as conn:`; salir del `with` es lo que confirma la transacción (`COMMIT`). Si se invalidara **antes**, otra petición podría leer el dato **viejo** de la BD (el commit aún no ha ocurrido) y guardarlo de nuevo en Redis: la caché quedaría con un dato desfasado hasta que caducara el TTL. El TTL es solo la **red de seguridad**, no la solución.
+- **Dónde y cómo se usa en mi proyecto:** `app/main.py`: `fila = conn.execute(INSERT ...).fetchone()` dentro del `with`, y fuera `invalidar_equipo(run_id)` y `return fila`. Una operación **rechazada** (`409`) lanza la excepción dentro del `with` y no llega a invalidar.
+- **Prueba real (prod):** lectura → `MISS` (13,2 ms) y `HIT` (0,7 ms); registrar otra captura y leer → **`MISS` con los dos Pokémon** (antes era un `HIT` con datos viejos); otra lectura → `HIT`; un registro rechazado con `409` y leer → **sigue `HIT`** (no invalida); una muerte y leer → `MISS` y el Pokémon muerto ya no está; con la **caché parada**, registrar un evento da `201` y la lectura `DEGRADED` con los datos correctos, y al volver la caché la primera lectura es `MISS` con los datos nuevos y la siguiente `HIT`.
+- **Prueba del TTL como red de seguridad (evidencia):** se cambia el dato **directamente en la BD** (`psql INSERT`, sin pasar por la API, así nadie invalida). Todo en un solo bloque de comandos, porque con TTL de 30 s no da tiempo a ir pegando comandos a mano (la primera vez caducó entre pasos y salió `MISS` antes de lo esperado). Resultado real: lecturas `MISS` → `HIT` (ttl 30); `INSERT 0 1` (Gengar); lectura inmediata `HIT` (ttl 29) **sin Gengar** (la caché sirve el dato viejo); tras `sleep 32`, `MISS` (ttl 30) **con Gengar**. Conclusión: sin invalidación el dato desfasado dura como máximo 30 s.
+- **Mejora posible (no aplicada):** invalidar solo con `captura` y `muerte` (un `fallo` no cambia el equipo); se invalida siempre por simplicidad y seguridad.
+- **Pregunta de defensa:** ¿por qué se invalida después del `COMMIT` y no antes, y para qué sirve entonces el TTL?
+
+### Cabeceras `X-Cache` y observabilidad en la interfaz (paso 3.3, pieza 5)
+- **Qué es:** las cabeceras HTTP son metadatos de la respuesta. La API añade tres propias en `GET /runs/{id}/team`: `X-Cache` (`HIT`, `MISS`, `OFF`, `DEGRADED`), `X-Cache-TTL` (segundos que le quedan a la entrada) y `X-Latency-Ms` (lo que tardó en resolverse la lectura).
+- **Para qué se usa:** hacer visible la caché sin mirar logs, y poder demostrarla en la defensa.
+- **Dónde y cómo se usa en mi proyecto:** `app/main.py` (`equipo_activo`) las envía; `app/static/app.js` las lee con `pedirConCabeceras` (que devuelve cuerpo y cabeceras) y `mostrarInfoCache` pinta la línea «Origen: caché · 2.1 ms · caduca en 25 s» bajo «Pokémon vivos». `pedir` sigue devolviendo solo el cuerpo y delega en `pedirConCabeceras`, así el resto del código no cambia.
+- **Por qué así:** una variable global con la «última respuesta» fallaría con `Promise.all` (guardaría la última que termina, no la del equipo); devolver las cabeceras junto al cuerpo es explícito. Prueba real: prod muestra origen base de datos → caché → base de datos tras registrar un evento → «caché caída» con `docker compose stop cache`; dev muestra «base de datos» sin TTL (`X-Cache: OFF`).
+- **Pregunta de defensa:** ¿por qué la interfaz distingue «caché caída» de «BD caída»?
+
 ### Redis y *cache-aside* (pendiente de ver en el paso 3.3)
 - **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.
 - **Dónde y cómo se usa en mi proyecto:** solo en prod (`cache`). Se cachea la lectura del equipo activo y se invalida al registrar un evento.

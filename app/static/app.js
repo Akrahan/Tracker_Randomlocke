@@ -4,9 +4,13 @@ const INTERVALO_ESTADO_MS = 3000;
 
 let dbAnterior = null;
 
-function mostrarEstado(dbOk, texto) {
+function mostrarEstado(dbOk, texto, cacheEstado) {
   $("estado-db").className = "punto " + (dbOk ? "ok" : "caido");
   $("estado-texto").textContent = texto;
+  const clase = cacheEstado === "ok" ? "ok" : cacheEstado === "caida" ? "caido" : "desconocido";
+  const etiqueta = cacheEstado === "ok" ? "conectada" : cacheEstado === "caida" ? "caída" : "no aplica";
+  $("estado-cache").className = "punto " + clase;
+  $("estado-cache-texto").textContent = "Caché: " + etiqueta;
 }
 
 async function actualizarEstado() {
@@ -14,11 +18,11 @@ async function actualizarEstado() {
     const respuesta = await fetch("/status", { cache: "no-store" });
     const datos = await respuesta.json();
     const dbOk = datos.db === "ok";
-    mostrarEstado(dbOk, dbOk ? "BD conectada" : "BD caída");
+    mostrarEstado(dbOk, dbOk ? "BD conectada" : "BD caída", datos.cache);
     if (dbOk && dbAnterior === false) recuperar();
     dbAnterior = dbOk;
   } catch {
-    mostrarEstado(false, "Sin conexión con la web");
+    mostrarEstado(false, "Sin conexión con la web", "desconocido");
     dbAnterior = false;
   }
 }
@@ -32,7 +36,7 @@ function mostrarMensaje(texto) {
   $("mensaje").textContent = texto;
 }
 
-async function pedir(url, opciones) {
+async function pedirConCabeceras(url, opciones) {
   const respuesta = await fetch(url, opciones);
   if (respuesta.status >= 500) {
     throw new Error("El servidor no puede acceder a la base de datos ahora mismo. Inténtalo de nuevo.");
@@ -44,7 +48,11 @@ async function pedir(url, opciones) {
       typeof detalle === "string" ? detalle : Array.isArray(detalle) ? detalle[0].msg : "Solicitud no válida"
     );
   }
-  return cuerpo;
+  return { cuerpo, cabeceras: respuesta.headers };
+}
+
+async function pedir(url, opciones) {
+  return (await pedirConCabeceras(url, opciones)).cuerpo;
 }
 
 function enviarJSON(datos) {
@@ -74,17 +82,31 @@ function recuperar() {
   cargarRuns(runActual).catch((error) => mostrarMensaje(error.message));
 }
 
+function mostrarInfoCache(cabeceras) {
+  const estado = cabeceras.get("X-Cache");
+  const ttl = cabeceras.get("X-Cache-TTL");
+  const ms = cabeceras.get("X-Latency-Ms");
+  const origen = estado === "HIT" ? "caché" : "base de datos";
+  let texto = `Origen: ${origen} · ${ms} ms`;
+  if (ttl !== null) texto += ` · caduca en ${ttl} s`;
+  if (estado === "DEGRADED") texto += " · caché caída";
+  $("info-cache").textContent = texto;
+}
+
 async function cargarRun() {
   runActual = $("selector-run").value || null;
   $("seccion-eventos").hidden = !runActual;
   $("seccion-datos").hidden = !runActual;
   if (!runActual) return;
 
-  const [vivos, eventos, muertos] = await Promise.all([
-    pedir(`/runs/${runActual}/team`),
+  const [equipo, eventos, muertos] = await Promise.all([
+    pedirConCabeceras(`/runs/${runActual}/team`),
     pedir(`/runs/${runActual}/encounters`),
     pedir(`/runs/${runActual}/graveyard`),
   ]);
+
+  const vivos = equipo.cuerpo;
+  mostrarInfoCache(equipo.cabeceras);
 
   $("vivos").replaceChildren(...vivos.map((p) => elemento("li", `${p.species} (${p.route})`)));
   $("cementerio").replaceChildren(...muertos.map((p) => elemento("li", `${p.species} (${p.route})`)));

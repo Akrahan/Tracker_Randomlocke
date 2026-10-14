@@ -158,6 +158,5 @@ flowchart LR
 
 ## 8. Qué viene ahora
 
-**Fase 2 (MVP en dev):** tablas `runs` y `encounters`, inicialización automática, los endpoints del MVP, la interfaz estática con el indicador de estado y la **prueba de persistencia con datos reales** (insertar, borrar el contenedor y comprobar que siguen). Ahí se practica también, si hay tiempo, la rama de la funcionalidad opcional.
-
+**Fase 2 (MVP en dev):** tablas `runs` y `encounters`, inicialización automática, los endpoints del MVP, la interfaz estática con el indicador de estado y la **prueba de persistencia con datos reales** (insertar, borrar el contenedor y comprobar que siguen).
 Primer paso: **2.1, esquema e inicialización automática**, con la decisión 5 pendiente (scripts de `initdb.d` o SQL idempotente al arrancar la app).

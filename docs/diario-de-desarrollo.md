@@ -105,11 +105,11 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar los conceptos, dar el compose por piezas, revisar el fichero escrito por el alumno y corregir la sangría del healthcheck. Parte del trabajo: Fase 1, servicio `db` de dev.
 - **Commit:** `feat(dev): add PostgreSQL service with persistent volume and healthcheck`
 
-### [Decisión fuera de paso: alineación con el temario y rama en la Fase 2]
+### [Decisión fuera de paso: alineación con el temario]
 - **Fecha:** 2026-10-10
 - **Archivos:** ninguno (revisión de documentación)
 - **Qué se hizo:** se compararon los Temas 3 (Git), 4 (Arquitecturas Cloud) y 5 (Contenedores) de la asignatura con el plan. Solo se pudo leer el texto de los PDF (las páginas que son imágenes del Tema 5 quedaron sin leer) y el Tema 4 solo por palabras clave. El plan sigue el enunciado y cubre las buenas prácticas del Tema 5; no se cambia ninguna decisión cerrada.
-- **Decisiones:** (1) la funcionalidad opcional de la Fase 2, si se llega, se hará en una **rama** y se fusionará en `main`, para practicar el concepto de Git del Tema 3 que aún no se ha usado. (2) Trivy queda como mejora opcional de la Fase 4, pendiente de decidir. (3) Para la defensa, el proyecto se describe como un monolito con servicios de apoyo (web + BD + caché), no como microservicios.
+- **Decisiones:** para la defensa, el proyecto se describe como un monolito con servicios de apoyo (web + BD + caché), no como microservicios.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: contrastar el plan con el temario y explicar monolito, microservicios y Trivy. Parte del trabajo: revisión de alineación del proyecto.
 - **Commit:** se incluirá con el commit del Paso 1.3.
 
@@ -214,7 +214,7 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
   - `app/schema.sql`: `runs` (`id` identity, `name`, `created_at`) y `encounters` (`id` identity, `run_id` con clave foránea a `runs`, `event_type` con `CHECK` en `captura`/`fallo`/`muerte`, `route`, `species`, `created_at`, `details JSONB`) con `CREATE TABLE IF NOT EXISTS`, más `idx_encounters_run_id`.
   - `main.py`: `conectar()` centraliza la conexión; `inicializar_db()` lee `schema.sql` y lo ejecuta con hasta 10 intentos separados por 2 s; el `lifespan` de FastAPI lo llama al arrancar. `comprobar_db()` reutiliza `conectar()`.
   - `Makefile`: `make clean` ejecuta `down -v` (borra también el volumen) tras imprimir un aviso; `.PHONY` actualizado. Sin confirmación interactiva: `make` usa `dash`, que no soporta `read -p`.
-- **Modelo de datos (acordado):** *append-only*; el equipo activo no se guarda, se deriva (capturas sin muerte posterior). La **ruta** vincula captura y muerte (en un Nuzlocke solo hay una captura por ruta); la API validará en el paso 2.2 que no haya una segunda captura en la misma ruta ni una muerte en una ruta sin captura. `species` es el nombre de la especie (no el tipo): los tipos, si se implementa la funcionalidad opcional de cobertura, irán en `details`.
+- **Modelo de datos (acordado):** *append-only*; el equipo activo no se guarda, se deriva (capturas sin muerte posterior). La **ruta** vincula captura y muerte (en un Nuzlocke solo hay una captura por ruta); la API validará en el paso 2.2 que no haya una segunda captura en la misma ruta ni una muerte en una ruta sin captura. `species` es el nombre de la especie (no el tipo): los tipos, si algún día se necesitan, irían en `details`.
 - **Verificación (observable):**
   - Aplicar `schema.sql` dos veces con `psql`: la segunda da `NOTICE: relation ... already exists, skipping` (idempotente). `\dt` lista `runs` y `encounters`.
   - `make down` y `make up-dev` con el volumen lleno: `web` arranca sin errores y `/status` devuelve `{"db":"ok"}` con 200.
@@ -228,16 +228,6 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige que la BD se inicialice automáticamente o al arrancar la aplicación. Hacerlo desde la web, de forma idempotente, mantiene el esquema sincronizado con el código sin perder datos y funciona igual con volúmenes nuevos o ya llenos.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar la decisión 5 y el modelo de datos, dar el SQL y el código en piezas, y ejecutar a petición del alumno la prueba de borrado y recreación de tablas en la BD de desarrollo (vacía). Parte del trabajo: Fase 2, esquema e inicialización.
 - **Commit:** `feat(db): add runs/encounters schema with idempotent init on startup`
-
-### [Decisión fuera de paso: reglas configurables por partida, anotadas como opción de la Fase 4]
-- **Fecha:** 2026-10-11
-- **Archivos:** ninguno (decisión de alcance)
-- **Qué se propuso:** que al crear una partida el jugador pueda elegir las reglas de esa run (prohibir objetos curativos, cláusula de especies, vidas por Pokémon, etc.), porque cada comunidad juega el Nuzlocke a su manera.
-- **Decisión:** se **anota como opción** para la funcionalidad opcional de la Fase 2 del documento de diseño (Fase 4 de la hoja de ruta, 14-15 oct), a decidir si el MVP se cierra a tiempo. Generaliza la opción «validador de reglas de la run» y se haría en una **rama** (practicar el concepto del Tema 3). El MVP sigue con las reglas fijas del plan. No cambia ninguna decisión cerrada.
-- **Diseño previsto:** columna `rules JSONB` en `runs`, añadida con `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` en `schema.sql` (ejemplo práctico de la decisión 5 B). Reglas *comprobables* (primer encuentro, cláusula de especies) con `409`; reglas *de honor* (objetos curativos, nivel máximo) solo informativas; «vidas por Pokémon» queda fuera por cambiar el modelo (distinguir debilitado de muerto).
-- **Ajuste inmediato en el MVP:** el paso 2.2 no crea el índice único `uq_encounters_muerte`; la regla «una sola muerte por ruta» se comprueba solo en la API, para no atar el esquema a una regla que podría ser configurable. Se mantiene `uq_encounters_primer_encuentro`.
-- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: clasificar las reglas según se puedan comprobar y valorar el impacto en el modelo y el calendario. Parte del trabajo: alcance de la Fase 2 opcional.
-- **Commit:** se incluirá con el commit del paso 2.2.
 
 ### [Paso 2.2: endpoints del MVP]
 - **Fecha:** 2026-10-11
@@ -266,15 +256,6 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** convierte la web en una aplicación útil sin romper el modelo *append-only* acordado, aplica las reglas del Nuzlocke con mensajes claros y deja la integridad garantizada por la base de datos aunque la API falle.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: explicar las consultas parametrizadas, la validación y las consultas derivadas; dar el código en piezas; revisar el código del alumno; hacer un pequeño refactor de `existe_run` y el índice de `schema.sql` a petición suya; y ejecutar varias pruebas HTTP y SQL en la BD de desarrollo. Parte del trabajo: Fase 2, API del MVP.
 - **Commit:** `feat(api): add runs, events, active team and graveyard endpoints`
-
-### [Idea opcional anotada: distinguir equipo y PC]
-- **Fecha:** 2026-10-11
-- **Archivos:** ninguno (decisión de alcance)
-- **Qué se planteó:** el jugador solo lleva 6 Pokémon en el equipo y guarda el resto en la PC; la pregunta era si los de la PC cuentan como «activos».
-- **Decisión:** en el MVP, «equipo activo» significa «Pokémon vivos» (equipo y PC), porque la aplicación solo ve eventos `captura`, `fallo` y `muerte`; el límite de 6 es una regla de honor que no se comprueba. Para no inducir a error, la sección de la interfaz (paso 2.3) se llamará **«Pokémon vivos»**. El endpoint `/team` no cambia.
-- **Idea opcional anotada** (junto a las reglas configurables por partida, Fase 4, solo si se cierra el MVP a tiempo): distinguir equipo y PC con dos eventos nuevos (`a_caja` y `a_equipo`), derivando el estado del último movimiento (modelo *append-only*), con una migración del `CHECK` de `event_type` (`DROP CONSTRAINT` y volver a crearlo) y cambios en las consultas. Coste alto para poco valor en el MVP.
-- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: aclarar qué devuelve la consulta del equipo y valorar el coste de modelar equipo y PC. Parte del trabajo: alcance del modelo de datos.
-- **Commit:** se incluirá con el siguiente commit.
 
 ### [Paso 2.3: interfaz estática]
 - **Fecha:** 2026-10-11
@@ -458,3 +439,4 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado exige entregar resultados de pruebas y verificaciones en el README; reunirlos con la salida real permite defenderlos y reutilizarlos tal cual.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: ejecutar las pruebas de verificación, recoger las salidas y redactar `docs/pruebas.md`. Parte del trabajo: Fase 4, pruebas y evidencias.
 - **Commit:** `docs: add verification results for prod, cache and make targets`
+

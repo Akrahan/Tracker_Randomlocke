@@ -126,4 +126,4 @@ La idea común es **tratar siempre los datos como datos, nunca como código**.
 
 **Fase 3, producción:** `docker-compose.prod.yml` y `.env.prod` con **Redis** (contraseña por variable de entorno, sin puertos publicados, con healthcheck), **dos redes** (una interna para `db` y `cache`), la caché ***cache-aside*** del equipo activo con invalidación **después del commit** y TTL, y `make up-prod` y `make clean`. Cierra con la **Puerta B**: MVP completo, el 13 de octubre por la noche.
 
-Primer paso: **3.1, `.env.prod` y `docker-compose.prod.yml`**. Las dos ideas opcionales anotadas (reglas configurables por partida y distinguir equipo y PC) quedan para la Fase 4, y solo si el MVP se cierra a tiempo.
+Primer paso: **3.1, `.env.prod` y `docker-compose.prod.yml`**.

@@ -29,7 +29,7 @@ flowchart LR
 | Redes `frontend` y `backend` (`internal: true`) | Pruebas y evidencias en `docs/pruebas.md` (4.2) |
 | Caché *cache-aside*, TTL, invalidación tras el commit, degradación | README final (4.3) |
 | Interfaz con origen, latencia, TTL e indicador de la caché | Entrega y ensayo (4.4) |
-| Makefile por entornos y verificación en limpio | Funcionalidad opcional de la Fase 2 (solo si hay tiempo) |
+| Makefile por entornos y verificación en limpio | Entrega y ensayo de la defensa |
 
 ## 3. Qué hicimos y por qué
 
@@ -119,4 +119,4 @@ Al parar Redis, `web` pasaba a `unhealthy`. Se **midió** en lugar de adivinar: 
 
 ## 8. Qué viene ahora
 
-**Puerta B (hoy, 13 de octubre por la noche): MVP completo**, con la etiqueta sugerida `v0.2-mvp`. Después, la **Fase 4**: revisión de seguridad (4.1), pruebas y evidencias en `docs/pruebas.md` (4.2), README final (4.3) y entrega con ensayo de la defensa (4.4). Entre el 14 y el 15 cabe como máximo **una** funcionalidad opcional de la Fase 2 (las ideas anotadas: reglas configurables por partida, distinguir equipo y PC), y solo si todo lo anterior va bien. Al cerrar la Fase 4 se escribirán `resumen-final.md` y `guia-de-defensa.md`.
+**Puerta B (hoy, 13 de octubre por la noche): MVP completo**, con la etiqueta sugerida `v0.2-mvp`. Después, la **Fase 4**: revisión de seguridad (4.1), pruebas y evidencias en `docs/pruebas.md` (4.2), README final (4.3) y entrega con ensayo de la defensa (4.4). Al cerrar la Fase 4 se escribirán `resumen-final.md` y `guia-de-defensa.md`.

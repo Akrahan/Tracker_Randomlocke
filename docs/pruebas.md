@@ -504,3 +504,50 @@ El campo «Especie» lleva `list="lista-especies"` y `autocomplete="off"`, y un 
 | Campo vacío | 0 | la lista se vacía |
 
 Sin *debounce*, escribir «zubat» lanzaría 5 peticiones; con él, 1 cuando el usuario hace una pausa. Dev (puerto 8000): `flab` → `Flabébé`; el indicador de la caché dice «no aplica» y registrar una captura con esa especie desde el formulario funciona (aparece en «Pokémon vivos»).
+
+### 11.6 Verificación final: recarga automática de la lista y fusión en `main` (pieza 6)
+
+Se vació prod con `make clean-prod` (borra contenedores, redes y volumen) y se levantó con `make up-prod`, sin ningún paso manual:
+
+```
+$ make ps-prod
+cache   Up 3 minutes (healthy)
+db      Up 3 minutes (healthy)
+web     Up 3 minutes (healthy)
+
+$ curl localhost:8080/status
+{"estado":"ok","db":"ok","cache":"ok"}
+
+$ SELECT count(*) de runs, encounters y species
+0 partidas, 0 eventos, 1025 especies
+```
+
+Las partidas se borraron y la tabla `species` se **recargó sola** al arrancar `web`. El CSV y la interfaz nueva están dentro de la imagen de prod (`/app/species.csv` y `cargarSugerencias` en `app.js`).
+
+```
+$ curl "localhost:8080/species?q=zub"   (primera lectura tras vaciar: la caché también arrancó vacía)
+x-cache: MISS  ["Zubat"]
+$ pi   -> MISS  [10 resultados]
+$ flab -> MISS  ["Flabébé"]
+$ curl localhost:8080/docs  -> 404   (documentación desactivada en prod)
+$ curl localhost:8000/species?q=zub (dev) -> x-cache: OFF  ["Zubat"]
+```
+
+**Interfaz sobre la base vacía (prod, navegador):** sin partidas, la sección de eventos está oculta; se crea la partida «Verificacion 3.5» desde el formulario y aparece el registro de eventos; `zub` → `Zubat`, `pi` → 10 sugerencias (Pichu, Pidgeot, Pidgeotto...), `flab` → `Flabébé`; registrar una captura `Zubat` en `Ruta 1` la muestra en «Pokémon vivos» con «Origen: base de datos · 16,5 ms · caduca en 30 s»; indicadores «BD conectada» y «Caché: conectada».
+
+**Fusión en `main`:**
+
+```
+$ git log --oneline --graph -8
+* ba9f07e feat(ui): add species autocomplete with datalist and debounce
+* 2dddf7a feat(species): cache species search in redis with a generic cache-aside helper
+* 0227aa8 docs: document species table and search endpoint (step 3.5, pieces 1-3)
+* bce06eb feat(species): add GET /species prefix search endpoint
+* 95e8c77 feat(species): create species table and load names on startup
+* 21530e2 feat(species): add local list of species names in Spanish
+...
+$ git branch --list      ->  * main   (la rama feat/autocompletado ya no existe)
+$ git branch -r          ->  origin/main
+```
+
+La rama se fusionó con *fast-forward* (historial lineal, sin commit de fusión), `main` coincide con `origin/main` y `app/species.csv` está en `main`.

@@ -15,7 +15,7 @@ flowchart LR
         W["web: FastAPI + estáticos<br/>hilo vigilante de la caché"]
     end
     subgraph BE["Red backend (internal: true)"]
-        DB[("db: PostgreSQL<br/>volumen pgdata")]
+        DB[("db: PostgreSQL<br/>volumen pgdata<br/>runs, encounters, species")]
         C[("cache: Redis<br/>sin volumen, con contraseña")]
     end
     W --> DB
@@ -59,6 +59,8 @@ flowchart LR
 
 **Degradación.** La caché es opcional y la BD imprescindible (decisión 7): caché caída → `/status` responde `200` con `degraded` y la lectura va a PostgreSQL; BD caída → `503`.
 
+**Ampliación (Paso 3.5): el autocompletado de especies como segundo uso de la caché.** El equipo activo son pocas filas y una consulta de 14 ms: el beneficio de cachearlo es real pero pequeño. Para darle un uso más claro se añadió una lista de ~1000 especies de referencia (nombres en español, descargados una sola vez de PokéAPI y guardados en `app/species.csv`, solo texto). `web` la carga al arrancar en la tabla `species` con `INSERT ... ON CONFLICT DO UPDATE` (idempotente, sobrevive a `make clean-prod`); `GET /species?q=zub` busca por prefijo con un índice `text_pattern_ops` y Redis la cachea (clave `species:<prefijo>:<límite>`, TTL de 1 h, **sin invalidación**, porque son datos de solo lectura). La interfaz sugiere nombres con un `<datalist>` y un *debounce* de 200 ms. La lógica *cache-aside* se extrajo a una función genérica `leer_con_cache`, compartida por el equipo y las especies. Solo **sugiere**: en un Randomlocke pueden aparecer formas que la lista no recoja.
+
 ### 3.4 El incidente que más enseñó: una caché parada tumbaba la web
 
 Al parar Redis, `web` pasaba a `unhealthy`. Se **midió** en lugar de adivinar: `redis-py` reintenta por defecto con esperas crecientes, y los *timeouts* del cliente **no cubren la resolución DNS**, que en Docker Desktop tarda 3-8 s con un contenedor parado. Un primer arreglo (un temporizador) funcionaba a medias y se descartó al ver en el registro del healthcheck que fallaba uno de cada dos chequeos. La solución: sin reintentos (`Retry(NoBackoff(), 0)`) y **un hilo vigilante** que comprueba Redis cada 3 s y apunta el resultado en una variable (`cache_estado`); ninguna petición espera nunca a Redis. Analogía: el camarero (web) ya no comprueba la libreta (Redis) en cada cliente; un ayudante mira la libreta cada 3 s y apunta en una pizarra.
@@ -80,6 +82,8 @@ Al parar Redis, `web` pasaba a `unhealthy`. Se **midió** en lugar de adivinar: 
 | TTL de 30 s como red de seguridad | Sin TTL | Si una invalidación falla, el dato desfasado desaparece solo |
 | Hilo vigilante y variable `cache_estado` | Temporizador o `ping` en cada petición | Ninguna petición espera a Redis |
 | Caché caída = `200 degraded`; BD caída = `503` | Ambas `503` | La caché es opcional; no debe marcar `web` como `unhealthy` |
+| Autocompletado: lista en PostgreSQL cacheada en Redis, con TTL largo y sin invalidar | Fichero estático en el navegador o consulta en directo a PokéAPI | Usa los tres servicios, se actualiza desde un único sitio y no depende de una API externa; los datos de referencia no cambian, al revés que el equipo |
+| La clave de caché incluye el límite (`species:zub:10`) | Clave solo con el prefijo | Con `limit=3` y `limit=10` compartirían entrada y una respuesta saldría truncada |
 | Targets por entorno y `clean` separado | `down` único y `clean` conjunto | Claridad y no borrar datos por accidente |
 | Verificación con `COMPOSE_PROJECT_NAME` y otro puerto | Parar el prod real | Aísla volumen y contenedores; no toca los datos reales |
 
@@ -94,6 +98,9 @@ Al parar Redis, `web` pasaba a `unhealthy`. Se **midió** en lugar de adivinar: 
 | TTL como red de seguridad | `INSERT` directo en la BD sin API | HIT con dato viejo (TTL 29); tras 32 s, MISS con el dato nuevo |
 | Degradación | `docker compose stop cache` | `201` al registrar, `DEGRADED` al leer, círculo rojo, `/status` en `degraded` y `web` `healthy` |
 | Reproducible desde cero | Clon limpio y `make up-prod` | Tres contenedores `healthy`, `/status` `ok`, MISS → HIT |
+| Autocompletado cacheado | `/species?q=zub` dos veces en prod | `MISS` (21,5 ms) → `HIT` (1,6 ms), TTL 3600; con la caché parada, `DEGRADED` y las sugerencias siguen |
+| La lista se recarga sola | `make clean-prod` y `make up-prod` | `0 partidas, 1025 especies` sin ningún paso manual |
+| *Debounce* | Teclear «zubat» deprisa y contar peticiones | 1 petición en vez de 5 |
 
 ## 6. Tropiezos y qué aprendimos
 
@@ -116,6 +123,8 @@ Al parar Redis, `web` pasaba a `unhealthy`. Se **midió** en lugar de adivinar: 
 6. **¿Cómo sabes que funciona desde cero?** Clono el repo en otra carpeta sin `.env`, los creo desde las plantillas y levanto prod con otro nombre de proyecto y puerto; salen los tres contenedores `healthy` y MISS → HIT.
 7. **¿Por qué tardaba tanto `/status` con Redis parado?** `redis-py` reintentaba y el DNS de Docker Desktop tarda 3-8 s en fallar con un contenedor parado; lo resolví con un hilo vigilante que escribe en una variable.
 8. **¿Qué limitación tiene tu caché?** A esta escala el beneficio es sobre todo pedagógico, y se invalida con cualquier evento aunque un `fallo` no cambie el equipo (simplicidad frente a precisión).
+9. **¿Por qué la lista de especies se cachea 1 hora y sin invalidar, y el equipo 30 s e invalidando?** La lista es de referencia: no cambia mientras la app corre, así que un TTL largo basta. El equipo cambia con cada evento, por eso se invalida al escribir y el TTL es solo la red de seguridad.
+10. **¿Por qué la clave de la caché de especies incluye el límite?** Porque la clave debe incluir todo lo que cambia la respuesta: sin él, `limit=3` y `limit=10` compartirían entrada y la segunda petición recibiría solo 3 resultados.
 
 ## 8. Qué viene ahora
 

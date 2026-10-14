@@ -145,3 +145,16 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/docs    # 200 en dev
 - Con la BD parada más de ~30 s, Docker marca `web` como `unhealthy` (3 comprobaciones seguidas fallidas); se recupera sola al volver la BD.
 - Si algo se queda raro: `make ps-prod` y `$P logs <servicio> --tail 30`.
 - No muestres nunca `.env.dev` ni `.env.prod` en pantalla durante la exposición.
+
+## 5. Autocompletado de especies (paso 3.5)
+
+```bash
+# sugerencias de la API (prod): 1.ª vez MISS, 2.ª HIT
+curl -si "localhost:8080/species?q=zub" | tr -d '\r' | grep -i -E '^x-cache:|^\['
+# cuántas especies hay en la tabla (debe ser 1025)
+$P exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "SELECT count(*) FROM species;"'
+# claves de la caché de especies y su TTL
+$P exec cache sh -c 'REDISCLI_AUTH=$REDIS_PASSWORD redis-cli --scan --pattern "species:*"'
+$P exec cache sh -c 'REDISCLI_AUTH=$REDIS_PASSWORD redis-cli TTL species:zub:10'
+```
+En la interfaz: escribe `zub` en «Especie» y aparece `Zubat`. **Tras `make clean-prod` y `make up-prod` la lista se recarga sola** (1025 especies) porque `web` la carga al arrancar. Con la caché parada (`make stop-cache`) las sugerencias siguen funcionando, leídas de PostgreSQL (`X-Cache: DEGRADED`).

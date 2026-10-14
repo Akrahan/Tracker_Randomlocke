@@ -376,3 +376,72 @@ Limitación honesta: las capas de la imagen salieron `CACHED` (el Docker ya las 
 | Persistencia: insertar, eliminar el contenedor, volver a levantar | §1 (dev) y §5 (prod) |
 | Caché: MISS → HIT e invalidación tras registrar un evento | §6 |
 | `make down` limpia el entorno | §7 |
+
+## 11. Autocompletado de especies (paso 3.5, rama `feat/autocompletado`)
+
+### 11.1 Tabla `species` y carga al arrancar (dev)
+
+```
+$ docker compose exec db psql -c "SELECT count(*) FROM species;" -c "SELECT id, name FROM species WHERE lower(name) LIKE 'zub%';"
+ count
+-------
+  1025
+
+ id | name
+----+-------
+ 41 | Zubat
+
+$ docker compose restart web   (carga idempotente)
+$ SELECT count(*) FROM species;
+1025
+```
+
+Tras reiniciar la web la tabla sigue con 1025 filas: la carga (`INSERT ... ON CONFLICT (id) DO UPDATE`) se puede repetir sin duplicar.
+
+### 11.2 El índice se usa para buscar por prefijo
+
+```
+$ SET enable_seqscan = off; EXPLAIN SELECT name FROM species WHERE lower(name) LIKE 'zub%';
+ Index Scan using idx_species_nombre on species  (cost=0.28..8.30 rows=1 width=8)
+   Index Cond: ((lower(name) ~>=~ 'zub'::text) AND (lower(name) ~<~ 'zuc'::text))
+   Filter: (lower(name) ~~ 'zub%'::text)
+```
+
+PostgreSQL convierte el `LIKE 'zub%'` en el intervalo desde `zub` hasta justo antes de `zuc`, y puede usar el índice gracias a `text_pattern_ops`. (Con solo 1025 filas el planificador elegiría por defecto recorrer la tabla; se fuerza para demostrar que el índice es utilizable.)
+
+### 11.3 Endpoint `GET /species?q=` (dev, puerto 8000)
+
+```
+zub            -> ["Zubat"]                         [HTTP 200]
+ZUB            -> ["Zubat"]                         [HTTP 200]
+"  zub  "      -> ["Zubat"]                         [HTTP 200]
+flab           -> ["Flabébé"]                       [HTTP 200]
+pi             -> ["Pichu","Pidgeot","Pidgeotto","Pidgey","Pidove","Pignite","Pikachu","Pikipek","Piloswine","Pincurchin"]  [HTTP 200]
+pi (limit=3)   -> ["Pichu","Pidgeot","Pidgeotto"]   [HTTP 200]
+mew            -> ["Mew","Mewtwo"]                  [HTTP 200]
+```
+
+**Entrada hostil** (todas devuelven `[]` con `200`; la tabla sigue con 1025 filas):
+
+```
+%                                -> []
+_                                -> []
+\                                -> []
+xyz                              -> []
+x'; DROP TABLE species; --       -> []
+(solo espacios)                  -> []
+```
+
+`%` y `_` no devuelven toda la lista gracias a `escapar_like`; la consulta, además, va parametrizada, así que el texto del usuario no se interpreta ni como SQL ni como patrón.
+
+**Validación** (`422` en todos los casos):
+
+```
+sin q                -> 422 (Field required)
+q vacía              -> 422 (String should have at least 1 character)
+q de 60 caracteres   -> 422 (String should have at most 50 characters)
+limit=99             -> 422 (Input should be less than or equal to 20)
+limit=0              -> 422 (Input should be greater than or equal to 1)
+```
+
+*(Pendiente de añadir en las piezas 4 a 6: caché en prod con `MISS` → `HIT`, degradación con la caché parada, interfaz, recarga tras `make clean-prod` y resumen final del paso.)*

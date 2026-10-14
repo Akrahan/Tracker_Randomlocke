@@ -673,7 +673,29 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Para qué se usa:** evitar nombres mal escritos o inventados y dar un uso claro a la caché: es un dato de **referencia** (solo lectura, ~1000 filas) que se consulta **una vez por tecla**.
 - **Dónde y cómo se usará en mi proyecto:** fichero de nombres en `app/` (descargado una vez de una fuente pública, solo texto) → tabla `species` creada y cargada al arrancar (`INSERT ... ON CONFLICT DO NOTHING`) → endpoint con *cache-aside* (clave `species:<prefijo>`, TTL largo, **sin invalidación**) → `<input list>` y `<datalist>` en la interfaz, con un pequeño retardo (*debounce*) para no lanzar una petición por tecla. En dev, sin caché: consulta directa a la BD.
 - **Por qué así:** (1) no se consulta una API externa en directo: sería una dependencia en tiempo de ejecución (riesgo R4 de `idea-y-alcance.md`); (2) tabla en BD y no fichero estático en el navegador: se actualiza desde un único sitio sin reconstruir la imagen y usa los tres servicios; (3) TTL largo sin invalidar: los datos no cambian mientras la app corre, al revés que el equipo activo, que se invalida con cada evento; (4) por defecto solo **sugiere**, porque en un Randomlocke pueden aparecer formas que la lista no recoja. Honestidad técnica: 1000 nombres cabrían en un fichero del navegador, pero así se justifica y se demuestra la caché con un caso realista de muchas lecturas repetidas.
+- **Estado:** implementadas las piezas 1 a 3 (datos, tabla `species` con carga al arrancar y endpoint `GET /species` sin caché). Pendientes la caché del endpoint (pieza 4), la interfaz (pieza 5) y la verificación final (pieza 6). Decisiones tomadas: nombres en **español** y el autocompletado **solo sugiere**.
 - **Pregunta de defensa:** ¿por qué el equipo activo se invalida al escribir y la lista de especies no, y qué papel tiene el TTL en cada caso?
+
+### Índice para buscar por prefijo: `text_pattern_ops` (paso 3.5)
+- **Qué es:** un índice B-tree sobre `lower(name)` declarado con `text_pattern_ops`. Un índice normal ordena los textos según la ordenación (*collation*) de la base de datos, y con una ordenación distinta de «C» no sirve para `LIKE 'zub%'`; `text_pattern_ops` lo ordena carácter a carácter y sí.
+- **Para qué se usa:** que una búsqueda por prefijo no recorra toda la tabla.
+- **Dónde y cómo se usa en mi proyecto:** `app/schema.sql`: `CREATE INDEX idx_species_nombre ON species (lower(name) text_pattern_ops)`. Se comprobó con `EXPLAIN`: `Index Scan using idx_species_nombre`, con la condición convertida en el intervalo `>= 'zub' AND < 'zuc'`. La consulta usa `lower(name) LIKE %s` para que coincida con la expresión indexada.
+- **Por qué así:** con 1025 filas el beneficio es mínimo (el planificador puede preferir recorrer la tabla), pero es la forma correcta de hacerlo y escala. Alternativa: `ILIKE` sin índice o un índice con la extensión `pg_trgm` (más potente, no hace falta aquí).
+- **Pregunta de defensa:** ¿por qué el índice se declara con `text_pattern_ops` y sobre `lower(name)`?
+
+### Carga idempotente con `INSERT ... ON CONFLICT DO UPDATE` (paso 3.5)
+- **Qué es:** un *upsert*: inserta la fila y, si ya existe una con la misma clave, la actualiza en vez de fallar.
+- **Para qué se usa:** repetir la carga de datos de referencia en cada arranque sin duplicar ni borrar la tabla.
+- **Dónde y cómo se usa en mi proyecto:** `cargar_especies` en `app/main.py` lee `app/species.csv` (`id,name`) y ejecuta `INSERT INTO species (id, name) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name` con `executemany`, dentro de `inicializar_db`. Tras reiniciar la web, la tabla sigue con 1025 filas.
+- **Por qué así:** es coherente con el esquema idempotente (decisión 5-B): si se corrige un nombre en el CSV, se aplica en el siguiente arranque; borrar y reinsertar dejaría la tabla vacía un instante y perdería la clave. La `id` de la Pokédex es la clave natural.
+- **Pregunta de defensa:** ¿por qué `ON CONFLICT (id) DO UPDATE` en vez de borrar la tabla y reinsertar en cada arranque?
+
+### `LIKE`: parámetros frente a escape (paso 3.5)
+- **Qué es:** en un `LIKE`, `%` significa «cualquier cosa» y `_` «un carácter». Son dos medidas distintas: los **parámetros** (`%s`) evitan que el texto del usuario sea interpretado como **SQL**; el **escape** (`escapar_like`: `\`, `%`, `_`) evita que sea interpretado como **patrón**.
+- **Para qué se usa:** que escribir `%` en el buscador no devuelva toda la lista, aunque no haya inyección SQL.
+- **Dónde y cómo se usa en mi proyecto:** `escapar_like` y `buscar_especies` en `app/main.py`. Pruebas: `%`, `_`, `\` y `x'; DROP TABLE species; --` devuelven `[]` y la tabla sigue con 1025 filas.
+- **Por qué así:** es el mismo principio que con XSS: tratar siempre los datos como datos. Aquí hay dos «lenguajes» (SQL y el patrón de `LIKE`) y cada uno necesita su protección. Además `Query(min_length, max_length, le)` limita la entrada y devuelve `422`.
+- **Pregunta de defensa:** si la consulta ya está parametrizada, ¿por qué hace falta `escapar_like`?
 
 ### Redis y *cache-aside* (paso 3.3, implementado)
 - **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.

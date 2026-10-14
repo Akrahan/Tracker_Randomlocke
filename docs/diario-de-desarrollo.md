@@ -464,3 +464,23 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Plazo y criterio de abandono:** las funcionalidades se congelan el 15 de octubre por la noche. Si el 15 a las 20:00 no está verificada en prod, se descarta con la rama sin tocar `main` y esta entrada pasa a ideas futuras. La práctica ya está completa sin ella.
 - **Orden de trabajo acordado:** datos de demostración (seed), **autocompletado**, capturas (para que salgan las sugerencias), README, entrega.
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: evaluar la idea frente a la caché y al alcance, diseñar la solución y planificarla. Parte del trabajo: Fase 3, ampliación de la caché.
+
+### [Paso 3.5, piezas 1 a 3: datos, tabla `species` y endpoint `GET /species`]
+- **Fecha:** 2026-10-14
+- **Archivos:** `app/species.csv` (nuevo), `app/schema.sql` (tabla `species` e índice), `app/main.py` (`import csv`, `SPECIES`, `cargar_especies`, `escapar_like`, endpoint `buscar_especies`). Rama `feat/autocompletado`.
+- **Comandos:** `git switch -c feat/autocompletado`; `{ echo "id,name"; curl -sL <pokemon_species_names.csv de PokéAPI> | awk -F, '$2==7 {print $1","$3}'; } > app/species.csv`; `wc -l`, `head`, `sed -n`, `tail`; `make up-dev`; `docker compose ... exec -T db psql ... SELECT count(*) FROM species`; `restart web`; `EXPLAIN` con `SET enable_seqscan = off`; `curl -G --data-urlencode "q=..." localhost:8000/species`; `git push -u origin feat/autocompletado`.
+- **Qué se ha hecho y cómo:**
+  - **Pieza 1 (datos):** se descargó una sola vez el fichero de nombres de especie de PokéAPI y se filtró el idioma español (`local_language_id = 7`, comprobado en `languages.csv`) a `app/species.csv` con dos columnas `id,name` (1025 especies; solo texto, sin imágenes).
+  - **Pieza 2 (tabla y carga):** tabla `species (id INTEGER PRIMARY KEY, name TEXT NOT NULL)` con índice `ON species (lower(name) text_pattern_ops)` para búsquedas por prefijo; `cargar_especies(conn)` lee el CSV y hace `INSERT ... ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name` con `executemany`, dentro del bucle de reintentos de `inicializar_db` y en la misma transacción que el esquema.
+  - **Pieza 3 (endpoint):** `GET /species?q=<prefijo>&limit=<n>` devuelve una lista de nombres. Valida con `Query` (`q` de 1 a 50 caracteres, `limit` de 1 a 20, 10 por defecto), recorta espacios y pasa a minúsculas, escapa `\`, `%` y `_` con `escapar_like`, y consulta con parámetros `%s`, `ORDER BY name` y `LIMIT`.
+- **Verificación (observable, dev):**
+  - Tabla: `count(*)` = 1025; `lower(name) LIKE 'zub%'` → `41 | Zubat`; tras `restart web` sigue en 1025 (carga idempotente).
+  - Índice: `EXPLAIN` con `seqscan` desactivado → `Index Scan using idx_species_nombre`, con `Index Cond: (lower(name) ~>=~ 'zub') AND (lower(name) ~<~ 'zuc')`.
+  - Endpoint: `zub`, `ZUB` y `"  zub  "` → `["Zubat"]`; `flab` → `["Flabébé"]`; `pi` → 10 resultados alfabéticos; `pi` con `limit=3` → 3; `mew` → `["Mew","Mewtwo"]`.
+  - Entrada hostil: `%`, `_`, `\`, `xyz` y `x'; DROP TABLE species; --` → `[]` con 200 y la tabla sigue con 1025 filas; solo espacios → `[]`.
+  - Validación: sin `q`, `q` vacía, `q` de 60 caracteres, `limit=99` y `limit=0` → `422`.
+  - Prod aún devuelve `404` en `/species` (no reconstruida; se actualiza con la pieza 4).
+- **Decisiones:** idioma **español**; el autocompletado **solo sugiere** (no valida) porque en un Randomlocke pueden aparecer formas que la lista no recoja; clave `id` de la Pokédex para que la carga sea un *upsert*; respuesta como lista de textos (lo más simple para el `<datalist>`); sin caché todavía (pieza 4). `text_pattern_ops` porque la ordenación de la BD no es «C» y sin él el `LIKE 'zub%'` no podría usar el índice.
+- **Pendiente:** pieza 4 (caché del endpoint), pieza 5 (interfaz), pieza 6 (verificación en dev y prod, y documentación final) y fusionar en `main`. Plazo: 15 de octubre a las 20:00.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: investigar el formato de la fuente de datos, diseñar la tabla, el índice y el endpoint, aplicar los cambios de la pieza 3 a petición del alumno y ejecutar las pruebas. Parte del trabajo: Fase 3, ampliación de la caché.
+- **Commit:** `feat(species): add local list of species names in Spanish`, `feat(species): create species table and load names on startup` y `feat(species): add GET /species prefix search endpoint`.

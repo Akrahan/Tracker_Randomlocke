@@ -146,6 +146,32 @@ $("form-run").addEventListener("submit", async (evento) => {
   }
 });
 
+const RETARDO_SUGERENCIAS_MS = 200;
+
+let temporizadorSugerencias = null;
+let peticionSugerencias = 0;
+
+async function cargarSugerencias() {
+  const texto = $("especie").value.trim();
+  const numero = ++peticionSugerencias;
+  if (!texto) {
+    $("lista-especies").replaceChildren();
+    return;
+  }
+  try {
+    const nombres = await pedir(`/species?q=${encodeURIComponent(texto)}`);
+    if (numero !== peticionSugerencias) return;
+    $("lista-especies").replaceChildren(...nombres.map((nombre) => new Option(nombre)));
+  } catch {
+    // las sugerencias son opcionales: si fallan, no se molesta al usuario
+  }
+}
+
+$("especie").addEventListener("input", () => {
+  clearTimeout(temporizadorSugerencias);
+  temporizadorSugerencias = setTimeout(cargarSugerencias, RETARDO_SUGERENCIAS_MS);
+});
+
 $("form-evento").addEventListener("submit", async (evento) => {
   evento.preventDefault();
   mostrarMensaje("");

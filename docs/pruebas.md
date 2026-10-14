@@ -490,3 +490,17 @@ zub          -> HIT   0,8 ms
 Con Redis parado el autocompletado sigue funcionando desde PostgreSQL.
 
 **Regresión del equipo activo tras refactorizar `leer_con_cache`** (partida 7, prod): `MISS` → `HIT` (ttl 30); registrar una captura nueva → `MISS` con los datos nuevos y luego `HIT`; un registro rechazado (`409`) no invalida (sigue `HIT`); una partida inexistente → `404` y no se crea ninguna clave en Redis (`EXISTS team:99999` = 0).
+
+### 11.5 Interfaz: sugerencias al escribir (pieza 5)
+
+El campo «Especie» lleva `list="lista-especies"` y `autocomplete="off"`, y un `<datalist>` que se rellena desde `/species` con un retardo (*debounce*) de 200 ms. Se contó el número real de peticiones con `performance.getEntriesByType('resource')` en el navegador:
+
+| Entrada | Peticiones lanzadas | Sugerencias |
+|---|---|---|
+| `zubat` tecleado rápido (40 ms por letra) | **1** (`?q=zubat`) | `Zubat` |
+| `pi` tecleado rápido | **1** (`?q=pi`) | 10 (Pichu, Pidgeot, Pidgeotto, Pidgey, Pidove, Pignite, Pikachu, Pikipek, Piloswine, Pincurchin) |
+| `mew` tecleado despacio (300 ms por letra) | **3** (`?q=m`, `?q=me`, `?q=mew`) | `Mew`, `Mewtwo` |
+| `<img src=x onerror=window.__xss=1>` | 1 | ninguna; **no se ejecutó nada** (`window.__xss` sigue sin definir) |
+| Campo vacío | 0 | la lista se vacía |
+
+Sin *debounce*, escribir «zubat» lanzaría 5 peticiones; con él, 1 cuando el usuario hace una pausa. Dev (puerto 8000): `flab` → `Flabébé`; el indicador de la caché dice «no aplica» y registrar una captura con esa especie desde el formulario funciona (aparece en «Pokémon vivos»).

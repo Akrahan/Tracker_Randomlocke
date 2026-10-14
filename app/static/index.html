@@ -38,7 +38,8 @@
           <option value="muerte">Muerte</option>
         </select>
         <input id="ruta" placeholder="Ruta" maxlength="100" required>
-        <input id="especie" placeholder="Especie" maxlength="100" required>
+        <input id="especie" list="lista-especies" placeholder="Especie" maxlength="100" autocomplete="off" required>
+        <datalist id="lista-especies"></datalist>
         <button>Registrar</button>
       </form>
     </section>

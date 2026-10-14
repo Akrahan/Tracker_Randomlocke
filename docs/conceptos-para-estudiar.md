@@ -392,6 +392,13 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** el compose de prod fija `name: randomlocke-prod`, que decide el nombre de los contenedores, las redes y **el volumen** (`randomlocke-prod_pgdata`). Una copia con el mismo nombre habría reutilizado el volumen del prod real, con otra contraseña, y habría fallado. Con la variable de entorno `COMPOSE_PROJECT_NAME` (más prioritaria que `name:`; la más prioritaria es `-p`) la copia vive aislada y no hace falta parar el prod real; el puerto 8081 evita chocar con el 8080. Limitación honesta: las capas de la imagen salieron `CACHED` (el Docker ya las tenía), así que no fue un *build* sin caché.
 - **Pregunta de defensa:** ¿cómo demuestras que tu proyecto no depende de nada que solo exista en tu máquina?
 
+### Anatomía de `docker compose --env-file ... -f ...` y el atajo `P="..."` (chuleta de la defensa)
+- **Qué es:** el comando base de todo el proyecto es `docker compose --env-file .env.prod -f docker-compose.prod.yml <acción> <servicio>`. `docker compose` es el programa; `--env-file .env.prod` le dice **de qué fichero leer las variables** (las `${...}` del YAML); `-f docker-compose.prod.yml` le dice **qué fichero de orquestación usar**; `<acción>` es lo que se hace (`up`, `stop`, `start`, `ps`, `logs`, `exec`, `rm`, `down`...) y `<servicio>` sobre qué (`web`, `db`, `cache`).
+- **Para qué se usa `P="..."`:** `P` es una **variable de la shell** que guarda ese trozo largo para escribir `$P stop cache` en lugar del comando entero. No es una función de Docker ni de Make: la shell sustituye `$P` por su texto antes de ejecutar. Se pierde al cerrar la terminal (por eso se redefine al empezar). En el Makefile hace lo mismo `COMPOSE_PROD`.
+- **Por qué no basta `docker compose stop cache` a secas:** sin `-f` busca un `docker-compose.yml` que no existe (nuestros ficheros se llaman `.dev.yml` y `.prod.yml`), y sin `--env-file` no resuelve las `${VARIABLES}`. Además, el `-f` elige **qué entorno** se toca (dev o prod): por eso hay `P` y `D`.
+- **Diferencias entre las acciones:** `stop`/`start` paran/arrancan un contenedor **sin eliminarlo**; `rm -s -f` lo elimina (el volumen sigue); `down` elimina contenedores y redes de todo el entorno; `down -v` además borra los volúmenes (los datos); `up -d` crea y arranca en segundo plano (`-d` = *detached*); `exec` ejecuta un comando **dentro** de un contenedor en marcha (`-T` desactiva la terminal interactiva, necesario en scripts).
+- **Pregunta de defensa:** ¿qué diferencia hay entre `docker compose stop db`, `rm -s -f db` y `down -v`, y cuáles conservan los datos?
+
 ---
 
 ## 8. Aplicación y base de datos

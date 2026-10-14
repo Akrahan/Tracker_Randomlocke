@@ -2,7 +2,8 @@ COMPOSE_DEV  = docker compose --env-file .env.dev  -f docker-compose.dev.yml
 COMPOSE_PROD = docker compose --env-file .env.prod -f docker-compose.prod.yml
 
 .PHONY: build-dev up-dev down-dev ps-dev logs-dev clean-dev \
-        build-prod up-prod down-prod ps-prod logs-prod clean-prod
+        build-prod up-prod down-prod ps-prod logs-prod clean-prod \
+        stop-cache start-cache stop-db start-db stop-web start-web psql-prod
 
 build-dev:
 	$(COMPOSE_DEV) build
@@ -41,6 +42,27 @@ logs-prod:
 clean-prod:
 	@echo "Se eliminan contenedores, red y VOLUMENES de PROD (todas las partidas y eventos)."
 	$(COMPOSE_PROD) down -v
+
+stop-cache:
+	$(COMPOSE_PROD) stop cache
+
+start-cache:
+	$(COMPOSE_PROD) start cache
+
+stop-db:
+	$(COMPOSE_PROD) stop db
+
+start-db:
+	$(COMPOSE_PROD) start db
+
+stop-web:
+	$(COMPOSE_PROD) stop web
+
+start-web:
+	$(COMPOSE_PROD) start web
+
+psql-prod:
+	$(COMPOSE_PROD) exec -T db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1 AS conexion_ok;" -c "\dt"'
 
 .PHONY: down
 down: down-dev down-prod

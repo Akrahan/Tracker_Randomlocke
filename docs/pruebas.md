@@ -444,4 +444,49 @@ limit=99             -> 422 (Input should be less than or equal to 20)
 limit=0              -> 422 (Input should be greater than or equal to 1)
 ```
 
-*(Pendiente de añadir en las piezas 4 a 6: caché en prod con `MISS` → `HIT`, degradación con la caché parada, interfaz, recarga tras `make clean-prod` y resumen final del paso.)*
+
+### 11.4 Caché del endpoint `/species` en prod (pieza 4)
+
+Clave `species:<prefijo>:<límite>`, TTL de 3600 s, sin invalidación (la lista no cambia mientras la app corre). Cabeceras `X-Cache`, `X-Cache-TTL` y `X-Latency-Ms`.
+
+```
+zub            -> MISS  ttl 3600  21,5 ms  ["Zubat"]
+zub            -> HIT   ttl 3600   1,6 ms
+ZUB            -> HIT   (misma clave: el prefijo se normaliza a minúsculas)
+"  zub  "      -> HIT   (se recortan los espacios)
+zub (limit=3)  -> MISS  16,3 ms (clave distinta: species:zub:3)
+zub (limit=3)  -> HIT    1,2 ms
+pi             -> MISS  17,9 ms   y después HIT 0,8 ms
+%              -> MISS  [] (se cachea también el resultado vacío)
+(solo espacios)-> [] sin cabeceras de caché (no se consulta)
+
+$ redis-cli --scan --pattern "species:*"
+species:%:10
+species:pi:10
+species:zub:10
+species:zub:3
+$ redis-cli TTL species:zub:10
+3598
+```
+
+La clave incluye el **límite**: si no, una petición con `limit=3` y otra con `limit=10` compartirían entrada y la segunda recibiría solo 3 resultados. Registrar un evento **no** invalida las especies: tras una captura, `zub` sigue siendo `HIT` (TTL 3596).
+
+**Dev (sin caché):** `X-Cache: OFF` en `/species` y en el equipo, con latencias de 15-17 ms.
+
+**Degradación con la caché parada:**
+
+```
+$ docker compose stop cache   (se esperan 12 s)
+species zub  -> DEGRADED  12,8 ms  ["Zubat"]
+species pi   -> DEGRADED  13,4 ms  [10 resultados]
+/status      -> {"estado":"degraded","db":"ok","cache":"caida"}
+
+$ docker compose start cache  (se esperan 25 s)
+zub          -> MISS  ttl 3600  (Redis arranca sin datos: no persiste)
+zub          -> HIT   0,8 ms
+/status      -> {"estado":"ok","db":"ok","cache":"ok"}
+```
+
+Con Redis parado el autocompletado sigue funcionando desde PostgreSQL.
+
+**Regresión del equipo activo tras refactorizar `leer_con_cache`** (partida 7, prod): `MISS` → `HIT` (ttl 30); registrar una captura nueva → `MISS` con los datos nuevos y luego `HIT`; un registro rechazado (`409`) no invalida (sigue `HIT`); una partida inexistente → `404` y no se crea ninguna clave en Redis (`EXISTS team:99999` = 0).

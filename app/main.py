@@ -41,7 +41,8 @@ cache = (
 )
 
 CACHE_VIGILANCIA_S = 3
-CACHE_TTL_S = 30
+CACHE_EQUIPO_TTL_S = 30
+CACHE_ESPECIES_TTL_S = 3600
 cache_estado = "ok" if CACHE_ENABLED else "no aplica"
 
 SCHEMA = Path(__file__).with_name("schema.sql")
@@ -121,8 +122,7 @@ def existe_run(conn, run_id: int) -> None:
         raise HTTPException(status_code=404, detail="La partida no existe")
 
 
-def leer_equipo(run_id: int):
-    clave = f"team:{run_id}"
+def leer_con_cache(clave: str, ttl_s: int, consultar):
     estado = "OFF"
 
     if cache is not None:
@@ -138,30 +138,56 @@ def leer_equipo(run_id: int):
                 marcar_cache_caida()
                 estado = "DEGRADED"
 
-    with conectar() as conn:
-        existe_run(conn, run_id)
-        datos = jsonable_encoder(
-            conn.execute(
-                "SELECT c.route, c.species, c.created_at "
-                "FROM encounters c "
-                "WHERE c.run_id = %s AND c.event_type = 'captura' "
-                "AND NOT EXISTS (SELECT 1 FROM encounters m "
-                "WHERE m.run_id = c.run_id AND m.route = c.route AND m.event_type = 'muerte') "
-                "ORDER BY c.created_at",
-                (run_id,),
-            ).fetchall()
-        )
+    datos = consultar()
 
     ttl = None
     if estado == "MISS":
         try:
-            cache.set(clave, json.dumps(datos), ex=CACHE_TTL_S)
-            ttl = CACHE_TTL_S
+            cache.set(clave, json.dumps(datos), ex=ttl_s)
+            ttl = ttl_s
         except redis.RedisError:
             marcar_cache_caida()
             estado = "DEGRADED"
 
     return datos, estado, ttl
+
+
+def poner_cabeceras_cache(response: Response, estado: str, ttl, inicio: float) -> None:
+    response.headers["X-Cache"] = estado
+    if ttl is not None and ttl >= 0:
+        response.headers["X-Cache-TTL"] = str(ttl)
+    response.headers["X-Latency-Ms"] = f"{(time.perf_counter() - inicio) * 1000:.1f}"
+
+
+def leer_equipo(run_id: int):
+    def consultar():
+        with conectar() as conn:
+            existe_run(conn, run_id)
+            return jsonable_encoder(
+                conn.execute(
+                    "SELECT c.route, c.species, c.created_at "
+                    "FROM encounters c "
+                    "WHERE c.run_id = %s AND c.event_type = 'captura' "
+                    "AND NOT EXISTS (SELECT 1 FROM encounters m "
+                    "WHERE m.run_id = c.run_id AND m.route = c.route AND m.event_type = 'muerte') "
+                    "ORDER BY c.created_at",
+                    (run_id,),
+                ).fetchall()
+            )
+
+    return leer_con_cache(f"team:{run_id}", CACHE_EQUIPO_TTL_S, consultar)
+
+
+def leer_especies(prefijo: str, limit: int):
+    def consultar():
+        with conectar() as conn:
+            filas = conn.execute(
+                "SELECT name FROM species WHERE lower(name) LIKE %s ORDER BY name LIMIT %s",
+                (escapar_like(prefijo) + "%", limit),
+            ).fetchall()
+        return [fila["name"] for fila in filas]
+
+    return leer_con_cache(f"species:{prefijo}:{limit}", CACHE_ESPECIES_TTL_S, consultar)
 
 
 def invalidar_equipo(run_id: int) -> None:
@@ -171,6 +197,7 @@ def invalidar_equipo(run_id: int) -> None:
         cache.delete(f"team:{run_id}")
     except redis.RedisError:
         marcar_cache_caida()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -283,10 +310,7 @@ def listar_eventos(run_id: int):
 def equipo_activo(run_id: int, response: Response):
     inicio = time.perf_counter()
     datos, estado, ttl = leer_equipo(run_id)
-    response.headers["X-Cache"] = estado
-    if ttl is not None and ttl >= 0:
-        response.headers["X-Cache-TTL"] = str(ttl)
-    response.headers["X-Latency-Ms"] = f"{(time.perf_counter() - inicio) * 1000:.1f}"
+    poner_cabeceras_cache(response, estado, ttl, inicio)
     return datos
 
 
@@ -307,18 +331,17 @@ def cementerio(run_id: int):
 
 @app.get("/species")
 def buscar_especies(
+    response: Response,
     q: str = Query(min_length=1, max_length=50),
     limit: int = Query(10, ge=1, le=20),
 ):
+    inicio = time.perf_counter()
     prefijo = q.strip().lower()
     if not prefijo:
         return []
-    with conectar() as conn:
-        filas = conn.execute(
-            "SELECT name FROM species WHERE lower(name) LIKE %s ORDER BY name LIMIT %s",
-            (escapar_like(prefijo) + "%", limit),
-        ).fetchall()
-    return [fila["name"] for fila in filas]
+    datos, estado, ttl = leer_especies(prefijo, limit)
+    poner_cabeceras_cache(response, estado, ttl, inicio)
+    return datos
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).with_name("static"), html=True), name="static")

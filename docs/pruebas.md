@@ -551,3 +551,20 @@ $ git branch -r          ->  origin/main
 ```
 
 La rama se fusionó con *fast-forward* (historial lineal, sin commit de fusión), `main` coincide con `origin/main` y `app/species.csv` está en `main`.
+
+### 11.7 Qué consigue la caché: menos consultas a la base de datos
+
+A esta escala la diferencia de velocidad no se nota a simple vista (14-16 ms frente a ~1 ms, muy por debajo de lo que percibe una persona, y el propio *debounce* de 200 ms es mayor). Lo que sí se puede medir es **cuántas transacciones llegan a PostgreSQL**, con el contador `xact_commit` de `pg_stat_database`, antes y después de 100 peticiones idénticas (`/species?q=pik`):
+
+```
+$ SELECT xact_commit FROM pg_stat_database WHERE datname = current_database();   (antes y después)
+
+PROD (con caché):  100 peticiones -> 7 transacciones en la BD
+DEV  (sin caché):  100 peticiones -> 204 transacciones en la BD
+
+Latencia en el servidor (X-Latency-Ms, 5 lecturas):
+PROD: 0,8  1,0  0,9  0,9  0,8 ms
+DEV : 15,7 16,0 15,3 15,1 14,3 ms
+```
+
+Con caché, las 100 peticiones se resuelven con **una** consulta (la primera, `MISS`) y las demás salen de Redis; las 7 transacciones son ruido (comprobaciones de salud del contenedor y las propias consultas de medida). Sin caché, cada petición llega a la BD. Es lo que pide el enunciado: *almacenar datos temporalmente y reducir consultas a la base de datos*. La mejora de velocidad (unas 15 veces en el servidor) existe, pero el efecto visible a esta escala es la carga que se ahorra, no la rapidez percibida.

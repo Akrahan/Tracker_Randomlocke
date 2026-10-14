@@ -158,3 +158,10 @@ $P exec cache sh -c 'REDISCLI_AUTH=$REDIS_PASSWORD redis-cli --scan --pattern "s
 $P exec cache sh -c 'REDISCLI_AUTH=$REDIS_PASSWORD redis-cli TTL species:zub:10'
 ```
 En la interfaz: escribe `zub` en «Especie» y aparece `Zubat`. **Tras `make clean-prod` y `make up-prod` la lista se recarga sola** (1025 especies) porque `web` la carga al arrancar. Con la caché parada (`make stop-cache`) las sugerencias siguen funcionando, leídas de PostgreSQL (`X-Cache: DEGRADED`).
+
+**Demostrar que la caché reduce consultas a la BD** (contador de transacciones antes y después de 100 peticiones iguales; en prod sube muy poco, en dev sube ~200):
+```bash
+tx() { $P exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "SELECT xact_commit FROM pg_stat_database WHERE datname = current_database();"'; }
+A=$(tx); for i in $(seq 1 100); do curl -s -o /dev/null "localhost:8080/species?q=pik"; done; B=$(tx); echo "transacciones: $((B-A))"
+```
+(Para dev usa `D` en vez de `P` y el puerto 8000.)

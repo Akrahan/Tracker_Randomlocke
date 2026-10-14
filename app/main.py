@@ -9,7 +9,7 @@ from typing import Literal
 
 import psycopg
 import redis
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
@@ -110,6 +110,10 @@ def marcar_cache_caida() -> None:
 
 def comprobar_cache() -> str:
     return cache_estado
+
+
+def escapar_like(texto: str) -> str:
+    return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def existe_run(conn, run_id: int) -> None:
@@ -299,6 +303,22 @@ def cementerio(run_id: int):
             "ORDER BY m.created_at",
             (run_id,),
         ).fetchall()
+
+
+@app.get("/species")
+def buscar_especies(
+    q: str = Query(min_length=1, max_length=50),
+    limit: int = Query(10, ge=1, le=20),
+):
+    prefijo = q.strip().lower()
+    if not prefijo:
+        return []
+    with conectar() as conn:
+        filas = conn.execute(
+            "SELECT name FROM species WHERE lower(name) LIKE %s ORDER BY name LIMIT %s",
+            (escapar_like(prefijo) + "%", limit),
+        ).fetchall()
+    return [fila["name"] for fila in filas]
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).with_name("static"), html=True), name="static")

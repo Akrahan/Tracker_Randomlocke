@@ -440,3 +440,27 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: ejecutar las pruebas de verificación, recoger las salidas y redactar `docs/pruebas.md`. Parte del trabajo: Fase 4, pruebas y evidencias.
 - **Commit:** `docs: add verification results for prod, cache and make targets`
 
+
+### [Decisión fuera de paso: se incorpora a la práctica el Paso 3.5, autocompletado de especies con caché (pendiente de implementar)]
+- **Fecha:** 2026-10-14
+- **Archivos:** ninguno todavía (solo planificación). Se tocarán `app/main.py`, `app/schema.sql`, `app/static/*` y se añadirá un fichero de datos en `app/`.
+- **Motivo de la decisión:** dar un uso más claro a la caché. Hoy se cachea el equipo activo (pocas filas; beneficio pequeño y reconocido). Una lista de especies de referencia es el caso clásico: **solo lectura**, ~1000 filas y **una consulta por cada tecla** que se escribe. Encaja con el enunciado («almacenar datos temporalmente y reducir consultas a la base de datos») y usa a la vez los tres servicios: la lista vive en **PostgreSQL**, la sirve la **API** y **Redis** la cachea. Además evita escribir nombres inventados y hace la interfaz más cómoda.
+- **Alcance respecto al plan original:** amplía el MVP con una funcionalidad pequeña que no estaba en `idea-y-alcance.md`. Respeta el riesgo R4 («no depender de APIs externas; usar datos locales»): la lista se descarga **una sola vez** y se guarda en el repositorio, solo texto (§1.6: ningún sprite oficial). Se desarrolla en una **rama** (`feat/autocompletado`) y se fusiona en `main` solo si funciona.
+- **Diseño:**
+  - **Datos:** fichero fuente en `app/` con los nombres de especie (descargado una vez de una fuente pública como PokéAPI; fuente concreta e idioma por decidir al implementarlo).
+  - **BD:** tabla `species` creada de forma idempotente en `schema.sql` y cargada al arrancar desde el fichero con `INSERT ... ON CONFLICT DO NOTHING`, igual que el esquema; sobrevive a `make clean-*` porque se recarga sola.
+  - **API:** `GET /species?q=zub`: búsqueda por prefijo, sin distinguir mayúsculas, con límite de resultados, consulta parametrizada y escape de `%` y `_`. En prod, *cache-aside* con clave `species:<prefijo>` y un **TTL largo** (p. ej. 1 h) **sin invalidación**, porque los datos no cambian durante la ejecución. Devuelve las cabeceras `X-Cache` y `X-Latency-Ms`. En dev (sin caché) consulta directamente la BD (`X-Cache: OFF`). Si Redis cae, degrada a PostgreSQL como el equipo activo.
+  - **Interfaz:** campo «Especie» con `<input list>` y `<datalist>` relleno con las sugerencias (con un pequeño retardo para no lanzar una petición por tecla; opciones creadas con `new Option`, nunca `innerHTML`).
+- **Decisiones que se cerrarán al implementar:** idioma de los nombres (español o inglés) y si solo **sugiere** (propuesta por defecto: los *randomizers* pueden producir formas que la lista no recoja) o **valida**.
+- **Plan por piezas (una por turno, con verificación):**
+  1. Datos: descargar la lista, limpiarla y guardarla en `app/` (solo nombres).
+  2. Esquema y carga: tabla `species` en `schema.sql` y carga al arrancar.
+  3. Endpoint `GET /species` sin caché (dev), con pruebas de prefijo, mayúsculas, límite, caracteres especiales y entrada vacía.
+  4. Caché del endpoint en prod (*cache-aside*, TTL largo, degradación).
+  5. Interfaz con `<datalist>` y retardo.
+  6. Verificación completa y documentación.
+- **Verificación esperada:** dev: sugerencias correctas y `X-Cache: OFF`; prod: primera búsqueda de un prefijo `MISS` y las siguientes `HIT` (ms); con la caché parada, `DEGRADED` y las sugerencias siguen funcionando; tras `make clean-prod` y `make up-prod` la tabla se recarga sola; el XSS sigue sin ejecutarse en las sugerencias.
+- **Documentación que habrá que actualizar al terminar:** entrada del diario del Paso 3.5, cuaderno de conceptos (entrada «Autocompletado de especies con caché», ya marcada como pendiente), nueva sección de `docs/pruebas.md`, `docs/resumenes/fase-3.md` (ampliación de la sección de la caché), `docs/resumenes/chuleta-de-comandos.md` y el README.
+- **Plazo y criterio de abandono:** las funcionalidades se congelan el 15 de octubre por la noche. Si el 15 a las 20:00 no está verificada en prod, se descarta con la rama sin tocar `main` y esta entrada pasa a ideas futuras. La práctica ya está completa sin ella.
+- **Orden de trabajo acordado:** datos de demostración (seed), **autocompletado**, capturas (para que salgan las sugerencias), README, entrega.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: evaluar la idea frente a la caché y al alcance, diseñar la solución y planificarla. Parte del trabajo: Fase 3, ampliación de la caché.

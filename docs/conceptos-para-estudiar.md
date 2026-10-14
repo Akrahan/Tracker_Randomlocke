@@ -668,6 +668,13 @@ Conceptos que el temario de la asignatura plantea y que conviene saber explicar,
 - **Por qué así:** una variable global con la «última respuesta» fallaría con `Promise.all` (guardaría la última que termina, no la del equipo); devolver las cabeceras junto al cuerpo es explícito. Prueba real: prod muestra origen base de datos → caché → base de datos tras registrar un evento → «caché caída» con `docker compose stop cache`; dev muestra «base de datos» sin TTL (`X-Cache: OFF`).
 - **Pregunta de defensa:** ¿por qué la interfaz distingue «caché caída» de «BD caída»?
 
+### Autocompletado de especies con caché (pendiente de ver en el paso 3.5)
+- **Qué es:** al escribir una especie en el formulario, la web sugiere nombres que empiezan por lo escrito («Zub» → «Zubat»). Las sugerencias salen de una tabla `species` de PostgreSQL, a través de `GET /species?q=zub`, y Redis cachea cada búsqueda.
+- **Para qué se usa:** evitar nombres mal escritos o inventados y dar un uso claro a la caché: es un dato de **referencia** (solo lectura, ~1000 filas) que se consulta **una vez por tecla**.
+- **Dónde y cómo se usará en mi proyecto:** fichero de nombres en `app/` (descargado una vez de una fuente pública, solo texto) → tabla `species` creada y cargada al arrancar (`INSERT ... ON CONFLICT DO NOTHING`) → endpoint con *cache-aside* (clave `species:<prefijo>`, TTL largo, **sin invalidación**) → `<input list>` y `<datalist>` en la interfaz, con un pequeño retardo (*debounce*) para no lanzar una petición por tecla. En dev, sin caché: consulta directa a la BD.
+- **Por qué así:** (1) no se consulta una API externa en directo: sería una dependencia en tiempo de ejecución (riesgo R4 de `idea-y-alcance.md`); (2) tabla en BD y no fichero estático en el navegador: se actualiza desde un único sitio sin reconstruir la imagen y usa los tres servicios; (3) TTL largo sin invalidar: los datos no cambian mientras la app corre, al revés que el equipo activo, que se invalida con cada evento; (4) por defecto solo **sugiere**, porque en un Randomlocke pueden aparecer formas que la lista no recoja. Honestidad técnica: 1000 nombres cabrían en un fichero del navegador, pero así se justifica y se demuestra la caché con un caso realista de muchas lecturas repetidas.
+- **Pregunta de defensa:** ¿por qué el equipo activo se invalida al escribir y la lista de especies no, y qué papel tiene el TTL en cada caso?
+
 ### Redis y *cache-aside* (paso 3.3, implementado)
 - **Qué es:** Redis es una base de datos en memoria, muy rápida. *Cache-aside*: la aplicación mira primero la caché y, si no está (MISS), consulta la BD y guarda el resultado.
 - **Dónde y cómo se usa en mi proyecto:** solo en prod (`cache`). Se cachea la lectura del equipo activo y se invalida al registrar un evento.

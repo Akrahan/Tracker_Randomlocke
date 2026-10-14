@@ -442,3 +442,19 @@ Registro paso a paso de la Práctica 1 según la hoja de ruta de `docs/dependenc
 - **Justificación:** el enunciado pide credenciales fuera del código, puertos mínimos y permisos mínimos; la revisión lo comprueba con evidencia y reduce la superficie de ataque de prod (menos privilegios en Redis, API no autodocumentada).
 - **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: diseñar y ejecutar la revisión, detectar Redis como root y la documentación expuesta, aplicar y verificar los arreglos a petición del alumno. Parte del trabajo: Fase 4, seguridad.
 - **Commit:** `chore(security): run redis as non-root and disable api docs in prod`
+
+### [Paso 4.2: pruebas y evidencias]
+- **Fecha:** 2026-10-14
+- **Archivos:** `docs/pruebas.md` (secciones 2 a 10 nuevas; la 1, persistencia en dev, ya existía).
+- **Comandos:** `make ps-dev`, `make ps-prod`, `make down`, `make up-dev`, `make up-prod` (ejecutados con `wsl -e make`), `curl localhost:8080/status` (y `:8000`), conexión TCP a `localhost:5432` y `:6379`, `docker compose stop|start cache|db`, `docker compose exec db psql -c "SELECT 1" -c "\dt"`, `docker compose rm -s -f db` y `up -d db`, `docker inspect`, `docker volume ls`, `curl -X POST /runs` y `/runs/<id>/events`, `curl -si /runs/<id>/team` (cabeceras `X-Cache`, `X-Cache-TTL`, `X-Latency-Ms`), `INSERT` directo con `psql`.
+- **Qué se ha hecho y cómo:** se ejecutó de forma ordenada toda la lista de verificaciones de §11 de `idea-y-alcance.md` y se guardó la salida real en `docs/pruebas.md`, con una tabla final que enlaza cada requisito con su sección. Las pruebas las ejecutó la IA a petición del alumno (que había elegido hacerlas él y cambió de opinión); las salidas son reales y no contienen credenciales.
+- **Verificación (observable):**
+  - Los cinco contenedores `healthy`; solo `web` publica puerto; desde el host 5432 y 6379 rechazan la conexión.
+  - `/status`: caché parada → `200 degraded`; BD parada → `503 down`; ambos se recuperan solos.
+  - Persistencia en prod: el contenedor de la BD cambia (`dc80222da005` → `c4abb313400c`), el volumen es el mismo y las filas también (4 partidas y 12 eventos antes y después).
+  - Caché: `MISS` (16,8 ms) → `HIT` (0,9 ms); registrar invalida; un `409` no invalida; un `INSERT` directo no invalida y el dato viejo se sirve hasta que caduca el TTL; con Redis parado, `201` y `X-Cache: DEGRADED`.
+  - `make down` conserva el volumen: tras `up-dev` y `up-prod`, 5 partidas y 16 eventos.
+- **Pendiente del alumno:** capturas de pantalla de la interfaz (todo operativo, caché parada y BD parada) para el README, p. ej. en `docs/img/`.
+- **Justificación:** el enunciado exige entregar resultados de pruebas y verificaciones en el README; reunirlos con la salida real permite defenderlos y reutilizarlos tal cual.
+- **Asistencia de IA:** Claude Code (app de escritorio), modelo Claude Sonnet 5.5 (`claude-sonnet-5-5`). Finalidad: ejecutar las pruebas de verificación, recoger las salidas y redactar `docs/pruebas.md`. Parte del trabajo: Fase 4, pruebas y evidencias.
+- **Commit:** `docs: add verification results for prod, cache and make targets`

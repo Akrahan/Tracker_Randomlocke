@@ -18,3 +18,11 @@ CREATE INDEX IF NOT EXISTS idx_encounters_run_id ON encounters (run_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_encounters_primer_encuentro
     ON encounters (run_id, route) WHERE event_type IN ('captura', 'fallo');
+
+CREATE TABLE IF NOT EXISTS species (
+    id    INTEGER PRIMARY KEY,
+    name  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_species_nombre
+    ON species (lower(name) text_pattern_ops);

@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import threading
@@ -44,7 +45,7 @@ CACHE_TTL_S = 30
 cache_estado = "ok" if CACHE_ENABLED else "no aplica"
 
 SCHEMA = Path(__file__).with_name("schema.sql")
-
+SPECIES = Path(__file__).with_name("species.csv")
 
 def conectar() -> psycopg.Connection:
     return psycopg.connect(
@@ -63,11 +64,23 @@ def inicializar_db(intentos: int = 10, espera: int = 2) -> None:
         try:
             with conectar() as conn:
                 conn.execute(esquema)
+                cargar_especies(conn)
             return
         except psycopg.Error:
             if intento == intentos:
                 raise
             time.sleep(espera)
+
+
+def cargar_especies(conn: psycopg.Connection) -> None:
+    with SPECIES.open(encoding="utf-8", newline="") as fichero:
+        filas = [(int(fila["id"]), fila["name"]) for fila in csv.DictReader(fichero)]
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO species (id, name) VALUES (%s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+            filas,
+        )
 
 
 def comprobar_db() -> bool:

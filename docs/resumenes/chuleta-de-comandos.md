@@ -165,3 +165,10 @@ tx() { $P exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "S
 A=$(tx); for i in $(seq 1 100); do curl -s -o /dev/null "localhost:8080/species?q=pik"; done; B=$(tx); echo "transacciones: $((B-A))"
 ```
 (Para dev usa `D` en vez de `P` y el puerto 8000.)
+
+## 6. Datos de demostración (script local, no está en el repositorio)
+
+```bash
+bash scripts/seed-demo.sh prod     # carga 6 partidas de ejemplo en prod (puerto 8080); "dev" para el 8000
+```
+Es idempotente (omite las partidas que ya existen) y usa la API. Para empezar de cero con datos de demo: `make clean-prod`, `make up-prod`, esperar a `healthy` y ejecutar el script. Si dev está parado tras reiniciar el PC: `make up-dev`.

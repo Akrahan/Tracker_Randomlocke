@@ -21,3 +21,6 @@ Practica1.pdf
 CLAUDE.md
 # Ideas para el proyecto personal tras la entrega (no forma parte de la práctica)
 docs/ideas-futuras.md
+
+# Datos de demostración locales (no forman parte de la práctica)
+scripts/seed-demo.sh

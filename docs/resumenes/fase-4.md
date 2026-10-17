@@ -4,7 +4,7 @@
 
 ## 1. Dónde estamos en una frase
 
-El sistema funciona, está **revisado** (seguridad), **demostrado** (pruebas con sus salidas) y **explicado** (README para cualquier lector): solo queda **entregarlo** (ZIP, etiqueta y subida al campus) y ensayar la defensa.
+El sistema funciona, está **revisado** (seguridad), **demostrado** (pruebas con sus salidas) y **explicado** (README para cualquier lector): y **está entregado** (etiqueta `v1.0-entrega` en GitHub y ZIP subido al campus); solo queda ensayar la defensa.
 
 ## 2. Mapa
 
@@ -12,16 +12,16 @@ El sistema funciona, está **revisado** (seguridad), **demostrado** (pruebas con
 flowchart LR
     A["4.1 Revisión de seguridad<br/>2 hallazgos corregidos, 1 limitación documentada"] --> B["4.2 Pruebas y evidencias<br/>docs/pruebas.md"]
     B --> C["4.3 README<br/>en lenguaje sencillo + capturas"]
-    C --> D["4.4 Entrega y ensayo<br/>ZIP, etiqueta, campus"]:::pendiente
-    classDef pendiente stroke-dasharray: 5 5
+    C --> D["4.4 Entrega<br/>ZIP, etiqueta, campus"]
 ```
 
 | Ya hecho en la Fase 4 | Pendiente |
 |---|---|
-| Revisión de seguridad con correcciones | ZIP con los `.env` reales y sin material local |
-| `docs/pruebas.md` con todas las verificaciones | Etiqueta `v1.0-entrega` y subida al campus |
-| README final y capturas | Ensayo de la defensa con la chuleta de comandos |
+| Revisión de seguridad con correcciones | Ensayo de la defensa con la guía y la chuleta de comandos |
+| `docs/pruebas.md` con todas las verificaciones | |
+| README final y capturas | |
 | Chuleta de comandos y `make` para tumbar servicios | |
+| Entrega: carpeta y ZIP preparados, etiqueta `v1.0-entrega` y subida al campus | |
 
 ## 3. Qué hicimos y por qué
 
@@ -59,6 +59,12 @@ flowchart LR
 
 - **`make stop-cache`, `stop-db`, `stop-web` (y los `start-*`) y `make psql-prod`:** tumbar un servicio suelto o comprobar la BD con un comando, sin recordar comandos largos.
 - **`docs/resumenes/chuleta-de-comandos.md`:** qué hace cada comando y guiones para las demos («levanta de cero», «tumba la caché», «demuestra la persistencia»).
+
+### 3.5 La entrega
+
+**El problema.** El enunciado pide un repositorio público y un archivo comprimido con todo el contenido, y esos dos no deben ser iguales: el ZIP lleva los `.env` reales (con credenciales exclusivas de este proyecto) y el repositorio no.
+
+**La solución.** Una carpeta de entrega **fuera** del proyecto (`RedesAvanzadas/Entrega/Tracker_Randomlocke`), construida con `git archive HEAD` (exactamente lo que hay en GitHub) más los dos `.env` reales, y sin `CLAUDE.md`, sin `.git` y sin el enunciado ni material local. Se comprobó que los `.env` son idénticos a los del proyecto, que los YAML son válidos con ellos, que el `Makefile` funciona y que los enlaces del README existen. El ZIP se generó con el `tar` de Windows (formato ZIP estándar). La entrega queda identificada por la etiqueta `v1.0-entrega`, y desde fuera (sin autenticar) se comprobó que GitHub muestra el último commit y la etiqueta, y que `.env.prod`, `.env.dev` y `CLAUDE.md` devuelven `404`.
 
 ## 4. Decisiones clave
 
@@ -109,4 +115,4 @@ flowchart LR
 
 ## 8. Qué viene ahora
 
-**Paso 4.4, entrega:** comprobar el repositorio público desde una ventana de incógnito, preparar el **ZIP** de la carpeta de trabajo **con** `.env.dev` y `.env.prod` (credenciales exclusivas de este proyecto) y **sin** `CLAUDE.md`, subirlo al campus digital y poner la etiqueta `v1.0-entrega`. Después, **ensayar la defensa** con la chuleta de comandos, sin mirarla. Entrega el domingo 18 de octubre; test y exposición el lunes 19.
+**La práctica está entregada.** El ZIP (con los `.env` reales) está subido al campus digital y el repositorio público está etiquetado como `v1.0-entrega`. Queda **ensayar la defensa** (lunes 19 de octubre): repasar la [`guia-de-defensa.md`](guia-de-defensa.md) y practicar los guiones de la [`chuleta-de-comandos.md`](chuleta-de-comandos.md) sin mirarla (levantar de cero, tumbar la caché, la BD y la web, y demostrar la persistencia y la caché).

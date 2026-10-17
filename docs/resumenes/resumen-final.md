@@ -120,4 +120,4 @@ El **código es idéntico**; solo cambia la configuración. Por eso pueden funci
 
 ## 9. Estado y siguiente
 
-Todo el trabajo técnico y documental está hecho y subido a GitHub. Queda el **Paso 4.4**: ZIP con los `.env` reales (sin `CLAUDE.md`), etiqueta `v1.0-entrega`, subida al campus (entrega el domingo 18 de octubre) y ensayo de la defensa (lunes 19).
+La práctica está **entregada**: el trabajo técnico y documental está en GitHub (etiqueta `v1.0-entrega`) y el ZIP, con los `.env` reales, subido al campus digital. Queda ensayar la defensa (lunes 19 de octubre), apoyándose en la guía de defensa y en la chuleta de comandos.

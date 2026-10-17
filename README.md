@@ -372,7 +372,7 @@ La práctica exige indicar la herramienta y su versión, para qué se usó y en 
 | Herramienta y versión | Para qué se usó | En qué parte |
 |---|---|---|
 | **Claude Code** (Anthropic, app de escritorio), modelo **Claude Sonnet 5.5** (`claude-sonnet-5-5`) | Tutoría paso a paso y explicación de conceptos; revisión del código del alumno; en algunos pasos, aplicar cambios a petición expresa del alumno (por ejemplo, el `Makefile`, la caché de las especies o el autocompletado de la interfaz); diagnóstico de fallos con mediciones; ejecución de las pruebas; redacción de la documentación | Todas las fases: entorno, Docker y Compose, red y seguridad, aplicación, caché, interfaz, Makefile, pruebas y documentación |
-| **Claude** (Anthropic), versión: *[completar]* | Valoración de la propuesta inicial frente al enunciado y redacción de los documentos de diseño | Alcance y decisiones de diseño (`docs/idea-y-alcance.md` y `docs/dependencias-y-pasos.md`) |
+| **Claude** (Anthropic), modelo **Claude Sonnet 5.5** | Valoración de la propuesta inicial frente al enunciado y redacción de los documentos de diseño | Alcance y decisiones de diseño (`docs/idea-y-alcance.md` y `docs/dependencias-y-pasos.md`) |
 
 El detalle de qué hizo el alumno y qué hizo la IA en cada paso está en el campo **«Asistencia de IA»** de [`docs/diario-de-desarrollo.md`](docs/diario-de-desarrollo.md). Las decisiones de diseño y la comprensión del sistema son del alumno, que ha revisado y probado cada paso.
 

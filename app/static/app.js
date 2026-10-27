@@ -73,9 +73,11 @@ function elemento(etiqueta, texto, clase) {
 // ---------- Figuras de Pokémon (pixel art) ----------
 // Los dibujos llegan ya recortados (make sprites-*). Para que el pixel art se vea nítido se amplía por un
 // número ENTERO de píxeles reales de pantalla (teniendo en cuenta el zoom de Windows) y sin suavizado.
-// Todas usan la misma escala, así se respetan los tamaños relativos como en los juegos.
-function figura(speciesId, gris, tam, reduccion = 1) {
-  const caja = elemento("div", undefined, "figura" + (gris ? " gris" : ""));
+// Dos modos:
+//  - suelta (portada y equipo): todas con la misma escala, así se respetan los tamaños relativos como en los juegos;
+//  - encajada (listas, dentro de un cuadro blanco): cada una al mayor factor entero que quepa en su cuadro.
+function figura(speciesId, gris, tam, reduccion = 1, encajada = false) {
+  const caja = elemento("div", undefined, "figura" + (encajada ? " cuadro" : "") + (gris ? " gris" : ""));
   caja.style.width = caja.style.height = tam * reduccion + "px";
   if (!speciesId) {
     caja.append(elemento("span", "?", "falta"));
@@ -86,9 +88,17 @@ function figura(speciesId, gris, tam, reduccion = 1) {
   img.onload = () => {
     const dpr = window.devicePixelRatio || 1;
     const lado = Math.max(img.naturalWidth, img.naturalHeight);
-    let k = Math.max(1, Math.round((tam * dpr) / 56));
-    while (k > 1 && lado * k > tam * dpr * 1.35) k--;
-    const lienzo = Math.max(Math.round(tam * dpr), lado * k);
+    if (encajada) tam -= 4; // el cuadro tiene 2 px de borde por cada lado
+    let k;
+    if (encajada) {
+      k = Math.floor((tam * 0.9 * dpr) / lado);
+    } else {
+      k = Math.max(1, Math.round((tam * dpr) / 56));
+      while (k > 1 && lado * k > tam * dpr * 1.35) k--;
+    }
+    const suavizar = k < 1; // un dibujo grande que no cabe ni a tamaño real se reduce (aquí sí con suavizado)
+    if (suavizar) k = (tam * 0.9 * dpr) / lado;
+    const lienzo = encajada ? Math.round(tam * dpr) : Math.max(Math.round(tam * dpr), Math.ceil(lado * k));
     const cv = document.createElement("canvas");
     cv.width = cv.height = lienzo;
     const css = (lienzo / dpr) * reduccion;
@@ -96,8 +106,8 @@ function figura(speciesId, gris, tam, reduccion = 1) {
     if (reduccion !== 1) cv.style.imageRendering = "pixelated";
     if (css > tam * reduccion) cv.style.margin = `${(tam * reduccion - css) / 2}px`;
     const cx = cv.getContext("2d");
-    cx.imageSmoothingEnabled = false;
-    const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+    cx.imageSmoothingEnabled = suavizar;
+    const dw = Math.round(img.naturalWidth * k), dh = Math.round(img.naturalHeight * k);
     cx.drawImage(img, Math.floor((lienzo - dw) / 2), Math.floor((lienzo - dh) / 2), dw, dh);
     caja.replaceChildren(cv);
   };
@@ -199,6 +209,30 @@ function mostrarInfoCache(cabeceras) {
   $("info-cache").textContent = texto;
 }
 
+function contador(nombre, valor, clase) {
+  const chip = elemento("span", nombre + " ", "chip" + (clase ? " " + clase : ""));
+  chip.append(elemento("b", String(valor)));
+  return chip;
+}
+
+// Fila de vivos o cementerio: mote (o «Sin mote»), especie y ruta; a la derecha, el dibujo en su cuadro blanco.
+// Todo el texto va con textContent (vía elemento()), nunca como HTML: protege frente a XSS con motes como «<img onerror=...>».
+function pintarLista(lista, pokemons, muertos, textoVacio) {
+  const filas = pokemons.map((p) => {
+    const fila = elemento("li", undefined, "fila");
+    const texto = elemento("div", undefined, "texto");
+    texto.append(
+      elemento("div", p.nickname || "Sin mote", "mote"),
+      elemento("div", p.species, "esp"),
+      elemento("div", p.route, "ruta")
+    );
+    fila.append(texto, figura(p.species_id, muertos, 64, 1, true));
+    return fila;
+  });
+  if (!filas.length) filas.push(elemento("li", textoVacio, "vacio"));
+  lista.replaceChildren(...filas);
+}
+
 async function cargarRun() {
   if (!runActual) return;
 
@@ -211,8 +245,14 @@ async function cargarRun() {
   const vivos = equipo.cuerpo;
   mostrarInfoCache(equipo.cabeceras);
 
-  $("vivos").replaceChildren(...vivos.map((p) => elemento("li", `${p.species} (${p.route})`)));
-  $("cementerio").replaceChildren(...muertos.map((p) => elemento("li", `${p.species} (${p.route})`)));
+  const capturas = eventos.filter((e) => e.event_type === "captura").length;
+  $("contadores").replaceChildren(
+    contador("Vivos", vivos.length),
+    contador("Muertos", muertos.length, "rojo"),
+    contador("Capturas", capturas)
+  );
+  pintarLista($("vivos"), vivos, false, "Nadie vivo todavía.");
+  pintarLista($("cementerio"), muertos, true, "Nadie ha muerto. ¡De momento!");
 
   const porRuta = new Map();
   for (const e of eventos) {

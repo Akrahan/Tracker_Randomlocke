@@ -116,21 +116,69 @@ main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 .figura.gris canvas { filter: grayscale(1) brightness(.85); opacity: .7; }
 .figura .falta { font-weight: 800; color: var(--suave); }
 
-/* ---------- Vista de partida (provisional hasta B2) ---------- */
+/* ---------- Vista de partida ---------- */
 .barra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
 .barra h2 { margin: 0; font-size: 28px; font-weight: 800; overflow-wrap: anywhere; }
+.contadores { display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.chip { background: #fff; border: 2px solid var(--linea); border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: 13px; }
+.chip b { color: var(--azul); }
+.chip.rojo b { color: var(--rojo-osc); }
+
+/* Siempre tres columnas en horizontal; en pantallas estrechas, desplazamiento lateral en vez de apilarse */
+.scroll-h { overflow-x: auto; padding-bottom: 6px; }
+.tres { display: grid; grid-template-columns: 0.9fr 1fr 1fr; gap: 18px; align-items: start; min-width: 900px; }
+.col-izq { display: grid; gap: 14px; }
+
+.titulo-panel {
+  margin: 0 0 12px; font-family: "Luckiest Guy", sans-serif; font-weight: 400; letter-spacing: 1px;
+  font-size: 20px; color: var(--azul-osc);
+}
+.panel-col { background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio); padding: 14px; }
+.panel-col.cementerio .titulo-panel { color: var(--rojo-osc); }
+
+/* Pokédex (equipo actual): panel rojo con borde negro, lente azul y tres luces verdes */
+.panel-pokedex {
+  position: relative; background: var(--rojo); border: 5px solid var(--tinta); border-radius: 22px;
+  padding: 12px 10px; box-shadow: inset 0 -8px 0 rgba(0, 0, 0, .18); color: #fff;
+}
+.panel-pokedex .titulo-panel { color: #fff; text-shadow: 0 2px 0 var(--tinta); padding-left: 34px; }
+.panel-pokedex::before {
+  content: ""; position: absolute; top: 12px; left: 14px; width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d6f3ff 0 25%, #3fb5ff 26% 100%);
+  border: 3px solid #fff; box-shadow: 0 0 0 2px var(--tinta);
+}
+.panel-pokedex::after {
+  content: ""; position: absolute; top: 14px; right: 16px; width: 44px; height: 10px;
+  background: radial-gradient(circle, var(--ok) 0 4px, transparent 5px) 0 0 / 15px 10px repeat-x;
+}
+.pendiente { margin: 0 4px 6px; font-size: 13px; font-weight: 700; opacity: .85; }
+
+/* Filas pequeñas de vivos y cementerio: mote, especie y ruta, y el dibujo en un cuadro blanco redondeado */
+.lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fila {
+  display: flex; align-items: center; gap: 10px; background: var(--fondo);
+  border-radius: 12px; padding: 4px 6px 4px 12px;
+}
+.fila .texto { flex: 1; min-width: 0; line-height: 1.2; }
+.fila .mote { font-weight: 800; font-size: 14px; overflow-wrap: anywhere; }
+.fila .esp { font-size: 13px; }
+.fila .ruta { font-size: 11px; color: var(--suave); font-weight: 600; }
+.cuadro { background: #fff; border: 2px solid var(--linea); border-radius: 14px; overflow: hidden; }
+.lista .vacio { padding: 6px 4px; }
+
+/* Bloques provisionales (formulario y tabla) hasta B2.3 */
 .panel {
   background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio);
-  padding: 12px 16px; margin-bottom: 16px; max-width: 720px;
+  padding: 12px 16px; margin-top: 16px; max-width: 720px;
 }
-.panel h2 { font-size: 1rem; margin: 12px 0 8px; }
+.panel h2 { font-size: 1rem; margin: 4px 0 8px; }
 .panel input, .panel select {
   width: 100%; margin-bottom: 8px; padding: 8px 10px; border: 2px solid var(--linea); border-radius: 10px; background: #fff;
 }
+.provisional { border-style: dashed; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--linea); }
-ul { padding-left: 20px; margin: 4px 0; }
-.info { font-size: .8rem; color: var(--suave); margin: 0 0 6px; }
+.info { font-size: .8rem; color: var(--suave); margin: -6px 0 10px; }
 
 /* ---------- Ventana «Nueva partida» ---------- */
 dialog {

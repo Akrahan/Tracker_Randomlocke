@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=b1">
+  <link rel="stylesheet" href="style.css?v=b2-1">
 </head>
 <body>
   <header class="cabecera">
@@ -31,14 +31,37 @@
       <div id="rejilla" class="rejilla"></div>
     </section>
 
-    <!-- Una partida (en B2 se sustituye por las tres columnas) -->
+    <!-- Una partida: barra y tres columnas (equipo, vivos, cementerio) -->
     <section id="vista-partida" class="vista" hidden>
       <div class="barra">
         <a class="btn" href="#/">← Partidas</a>
         <h2 id="titulo-partida"></h2>
+        <div id="contadores" class="contadores"></div>
       </div>
 
-      <section id="seccion-eventos" class="panel">
+      <!-- Siempre tres columnas en horizontal: si no caben, la zona se desplaza hacia los lados -->
+      <div class="scroll-h">
+        <div class="tres">
+          <div class="col-izq">
+            <div class="panel-pokedex">
+              <h2 class="titulo-panel">Equipo actual</h2>
+              <p class="pendiente">El equipo llega en la siguiente pieza (B2.2).</p>
+            </div>
+          </div>
+          <div class="panel-col">
+            <h2 class="titulo-panel">Pokémon vivos</h2>
+            <p id="info-cache" class="info"></p>
+            <ul id="vivos" class="lista"></ul>
+          </div>
+          <div class="panel-col cementerio">
+            <h2 class="titulo-panel">Cementerio</h2>
+            <ul id="cementerio" class="lista"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Provisional hasta B2.3: el formulario pasará a una ventana con campo de mote -->
+      <section id="seccion-eventos" class="panel provisional">
         <h2>Registrar evento</h2>
         <form id="form-evento">
           <select id="tipo-evento">
@@ -53,19 +76,13 @@
         </form>
       </section>
 
-      <section id="seccion-datos" class="panel">
-        <h2>Pokémon vivos</h2>
-        <p id="info-cache" class="info"></p>
-        <ul id="vivos"></ul>
-
+      <!-- Provisional: el diseño no la incluye; se decide qué hacer con ella -->
+      <section class="panel provisional">
         <h2>Capturas por ruta</h2>
         <table>
           <thead><tr><th>Ruta</th><th>Resultado</th><th>Especie</th></tr></thead>
           <tbody id="rutas"></tbody>
         </table>
-
-        <h2>Cementerio</h2>
-        <ul id="cementerio"></ul>
       </section>
     </section>
   </main>
@@ -82,6 +99,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=b1"></script>
+  <script src="app.js?v=b2-1"></script>
 </body>
 </html>

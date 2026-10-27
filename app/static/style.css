@@ -127,7 +127,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 /* Siempre tres columnas en horizontal; en pantallas estrechas, desplazamiento lateral en vez de apilarse */
 .scroll-h { overflow-x: auto; padding-bottom: 6px; }
 .tres { display: grid; grid-template-columns: 0.9fr 1fr 1fr; gap: 18px; align-items: start; min-width: 900px; }
-.col-izq { display: grid; gap: 14px; }
+.col-izq, .col-der { display: grid; gap: 14px; }
 
 .titulo-panel {
   margin: 0 0 12px; font-family: "Luckiest Guy", sans-serif; font-weight: 400; letter-spacing: 1px;
@@ -135,6 +135,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 }
 .panel-col { background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio); padding: 14px; }
 .panel-col.cementerio .titulo-panel { color: var(--rojo-osc); }
+.panel-col.fallos .titulo-panel { color: var(--suave); font-size: 16px; }
 
 /* Pokédex (equipo actual): panel rojo con borde negro, lente azul y tres luces verdes */
 .panel-pokedex {
@@ -213,19 +214,19 @@ dialog.selector { width: min(460px, 94vw); }
 .fila .ruta { font-size: 11px; color: var(--suave); font-weight: 600; }
 .cuadro { background: #fff; border: 2px solid var(--linea); border-radius: 14px; overflow: hidden; }
 .lista .vacio { padding: 6px 4px; }
+/* Las filas de vivos y cementerio se pueden pulsar para abrir la ficha */
+button.fila { width: 100%; border: 2px solid transparent; text-align: left; color: var(--tinta); cursor: pointer; }
+button.fila:hover, button.fila:focus-visible { border-color: var(--azul); background: #eef0ff; outline: none; }
+.cementerio button.fila:hover, .cementerio button.fila:focus-visible { border-color: var(--rojo-osc); background: #fff0f0; }
 
-/* Bloque provisional (tabla «Capturas por ruta»), pendiente de decidir */
-.panel {
-  background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio);
-  padding: 12px 16px; margin-top: 16px; max-width: 720px;
+/* Fallos: texto y botón de eliminar */
+.fila.fallo { padding: 6px 6px 6px 12px; }
+.borrar {
+  width: 30px; height: 30px; flex: none; border: 2px solid var(--linea); border-radius: 50%; background: #fff;
+  color: var(--rojo-osc); font-weight: 800; cursor: pointer;
 }
-.panel h2 { font-size: 1rem; margin: 4px 0 8px; }
-.panel input, .panel select {
-  width: 100%; margin-bottom: 8px; padding: 8px 10px; border: 2px solid var(--linea); border-radius: 10px; background: #fff;
-}
-.provisional { border-style: dashed; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--linea); }
+.borrar:hover { border-color: var(--rojo-osc); background: #fff0f0; }
+
 .info { font-size: .8rem; color: var(--suave); margin: -6px 0 10px; }
 
 /* ---------- Ventana «Nueva partida» ---------- */
@@ -240,7 +241,27 @@ dialog input { width: 100%; padding: 10px 12px; border: 2px solid var(--linea); 
 dialog input:focus { outline: none; border-color: var(--azul); }
 .botones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 
-/* Ventana «Registrar evento» */
+/* ---------- Ficha del Pokémon ---------- */
+dialog.ficha { width: min(520px, 94vw); }
+.ficha-cabecera {
+  display: flex; gap: 16px; align-items: center; padding: 18px;
+  background: linear-gradient(120deg, var(--azul) 0 60%, var(--azul-osc)); color: #fff;
+}
+.ficha-dibujo .cuadro { border: 3px solid #fff; }
+.ficha-datos { min-width: 0; }
+.ficha-datos h3 { margin: 0; color: #fff; font-size: 30px; overflow-wrap: anywhere; }
+.ficha-sub { margin: 2px 0 0; font-weight: 700; opacity: .9; }
+.tipos { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.tipo { color: #fff; font-weight: 800; font-size: 12px; padding: 3px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .5px; }
+.ficha-estado { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.marca-estado { background: rgba(255, 255, 255, .2); padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.marca-estado.muerto { background: var(--rojo); }
+.ficha .cerrar { align-self: flex-start; }
+.ficha-error { padding: 10px 18px 0; }
+.ficha-acciones { display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 18px 18px; }
+.btn.peligro { margin-left: auto; color: var(--rojo-osc); border-color: var(--rojo-osc); box-shadow: 0 3px 0 var(--rojo-osc); }
+
+/* Ventana «Nuevo encuentro» */
 .campo {
   display: grid; gap: 4px; margin-bottom: 10px; font-weight: 800; font-size: 12px;
   color: var(--suave); text-transform: uppercase; letter-spacing: .4px;

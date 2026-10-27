@@ -394,6 +394,38 @@ def equipo_activo(run_id: int, response: Response):
     return datos
 
 
+# ---------- Corregir errores ----------
+# Decisión del 27 oct. (opción A): un error de escritura no es historia de la partida, así que se BORRA de verdad
+# (el registro sigue siendo append-only para lo que sí pasó). La ruta va como ?route= porque puede contener «/».
+
+@app.delete("/runs/{run_id}/encounters", status_code=204)
+def eliminar_encuentro(run_id: int, route: str = Query(min_length=1, max_length=100)):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        if conn.execute(
+            "SELECT 1 FROM encounters WHERE run_id = %s AND route = %s AND event_type IN ('captura', 'fallo')",
+            (run_id, route),
+        ).fetchone() is None:
+            raise HTTPException(status_code=404, detail="No hay ningún encuentro en esa ruta")
+        # Todo en una transacción: el sitio en el equipo, la muerte (si la hay) y la captura o el fallo
+        conn.execute("DELETE FROM party WHERE run_id = %s AND route = %s", (run_id, route))
+        conn.execute("DELETE FROM encounters WHERE run_id = %s AND route = %s", (run_id, route))
+    invalidar_equipo(run_id)
+
+
+@app.delete("/runs/{run_id}/deaths", status_code=204)
+def revivir(run_id: int, route: str = Query(min_length=1, max_length=100)):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        borradas = conn.execute(
+            "DELETE FROM encounters WHERE run_id = %s AND route = %s AND event_type = 'muerte'",
+            (run_id, route),
+        ).rowcount
+        if not borradas:
+            raise HTTPException(status_code=404, detail="Ese Pokémon no está muerto")
+    invalidar_equipo(run_id)
+
+
 def leer_party(conn, run_id: int):
     return conn.execute(
         "SELECT p.position, c.route, c.species, c.details->>'nickname' AS nickname, "

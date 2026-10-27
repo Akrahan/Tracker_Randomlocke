@@ -243,7 +243,9 @@ function contador(nombre, valor, clase) {
 // Todo el texto va con textContent (vía elemento()), nunca como HTML: protege frente a XSS con motes como «<img onerror=...>».
 function pintarLista(lista, pokemons, muertos, textoVacio) {
   const filas = pokemons.map((p) => {
-    const fila = elemento("li", undefined, "fila");
+    const fila = elemento("button", undefined, "fila");
+    fila.type = "button";
+    fila.addEventListener("click", () => abrirFicha(p, !muertos));
     const texto = elemento("div", undefined, "texto");
     texto.append(
       elemento("div", p.nickname || "Sin mote", "mote"),
@@ -251,10 +253,29 @@ function pintarLista(lista, pokemons, muertos, textoVacio) {
       elemento("div", p.route, "ruta")
     );
     fila.append(texto, figura(p.species_id, muertos, 64, 1, true));
-    return fila;
+    const li = elemento("li");
+    li.append(fila);
+    return li;
   });
   if (!filas.length) filas.push(elemento("li", textoVacio, "vacio"));
   lista.replaceChildren(...filas);
+}
+
+function pintarFallos(fallos) {
+  const filas = fallos.map((e) => {
+    const fila = elemento("li", undefined, "fila fallo");
+    const texto = elemento("div", undefined, "texto");
+    texto.append(elemento("div", e.species, "esp"), elemento("div", e.route, "ruta"));
+    const borrar = elemento("button", "✕", "borrar");
+    borrar.type = "button";
+    borrar.title = "Eliminar este fallo";
+    borrar.setAttribute("aria-label", `Eliminar el fallo de ${e.route}`);
+    borrar.addEventListener("click", () => eliminarEncuentro(e.route, `el fallo de ${e.route} (${e.species})`));
+    fila.append(texto, borrar);
+    return fila;
+  });
+  if (!filas.length) filas.push(elemento("li", "Ningún fallo.", "vacio"));
+  $("fallos").replaceChildren(...filas);
 }
 
 // ---------- Equipo (Pokédex) ----------
@@ -293,6 +314,14 @@ function pintarEquipo() {
     quitar.addEventListener("click", (evento) => {
       evento.stopPropagation(); // que no cuente como pulsar la casilla (en B3 abrirá la ficha)
       guardarEquipo(equipoActual.filter((q) => q.route !== p.route).map((q) => q.route));
+    });
+
+    casilla.addEventListener("click", () => abrirFicha(p, p.alive));
+    casilla.addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter" || evento.key === " ") {
+        evento.preventDefault();
+        abrirFicha(p, p.alive);
+      }
     });
 
     // Sin mote, la especie hace de nombre; debajo, siempre la ruta.
@@ -373,25 +402,7 @@ async function cargarRun() {
   pintarLista($("vivos"), vivos, false, "Nadie vivo todavía.");
   pintarLista($("cementerio"), muertos, true, "Nadie ha muerto. ¡De momento!");
 
-  const porRuta = new Map();
-  for (const e of eventos) {
-    if (e.event_type === "muerte") {
-      if (porRuta.has(e.route)) porRuta.get(e.route).muerto = true;
-      continue;
-    }
-    porRuta.set(e.route, { resultado: e.event_type, especie: e.species, muerto: false });
-  }
-  $("rutas").replaceChildren(
-    ...[...porRuta].map(([ruta, fila]) => {
-      const tr = document.createElement("tr");
-      tr.append(
-        elemento("td", ruta),
-        elemento("td", fila.resultado + (fila.muerto ? " (muerto)" : "")),
-        elemento("td", fila.especie)
-      );
-      return tr;
-    })
-  );
+  pintarFallos(eventos.filter((e) => e.event_type === "fallo"));
 }
 
 $("form-run").addEventListener("submit", async (evento) => {
@@ -435,14 +446,99 @@ $("especie").addEventListener("input", () => {
   temporizadorSugerencias = setTimeout(cargarSugerencias, RETARDO_SUGERENCIAS_MS);
 });
 
-// ---------- Registrar evento (ventana) ----------
-// El mote solo tiene sentido en una captura (la API lo ignora en fallos y muertes): el campo se oculta en los demás.
-// En una muerte, la ruta sugiere las de los Pokémon vivos y, al elegir una, rellena la especie.
+// ---------- Ficha del Pokémon ----------
+const COLOR_TIPO = {
+  normal: "#9a9a8e", fire: "#f08030", water: "#6890f0", grass: "#78c850", electric: "#e8b800", ice: "#78c8d0",
+  fighting: "#c03028", poison: "#a040a0", ground: "#d8b858", flying: "#8f87e8", psychic: "#f85888", bug: "#a8b820",
+  rock: "#b8a038", ghost: "#705898", dragon: "#7038f8", dark: "#705848", steel: "#a0a0c0", fairy: "#e87fa0",
+};
+
+async function accionFicha(promesa) {
+  $("error-ficha").textContent = "";
+  try {
+    await promesa;
+    $("ficha").close();
+    await cargarRun();
+  } catch (error) {
+    $("error-ficha").textContent = error.message;
+  }
+}
+
+function boton(texto, clase, alPulsar) {
+  const b = elemento("button", texto, "btn" + (clase ? " " + clase : ""));
+  b.type = "button";
+  b.addEventListener("click", alPulsar);
+  return b;
+}
+
+function abrirFicha(p, vivo) {
+  const enEquipo = equipoActual.some((q) => q.route === p.route);
+  $("error-ficha").textContent = "";
+  $("ficha-dibujo").replaceChildren(figura(p.species_id, !vivo, 112, 1, true));
+  $("ficha-nombre").textContent = p.nickname || p.species;
+  $("ficha-sub").textContent = (p.nickname ? p.species + " · " : "") + p.route;
+  $("ficha-tipos").replaceChildren(
+    ...(p.types || []).map((t) => {
+      const etiqueta = elemento("span", t.name, "tipo");
+      etiqueta.style.background = COLOR_TIPO[t.identifier] || "#777";
+      return etiqueta;
+    })
+  );
+  const estado = [elemento("span", vivo ? "Vivo" : "Muerto", "marca-estado" + (vivo ? "" : " muerto"))];
+  if (enEquipo) estado.push(elemento("span", "En el equipo", "marca-estado"));
+  $("ficha-estado").replaceChildren(...estado);
+
+  // Solo las acciones que tienen sentido en cada caso
+  const acciones = [];
+  if (vivo) {
+    acciones.push(boton("Ha muerto", "primario", () =>
+      accionFicha(pedir(`/runs/${runActual}/events`,
+        enviarJSON({ event_type: "muerte", route: p.route, species: p.species })))));
+  } else {
+    acciones.push(boton("Revivir", "", () =>
+      accionFicha(pedir(`/runs/${runActual}/deaths?route=${encodeURIComponent(p.route)}`, { method: "DELETE" }))));
+  }
+  if (enEquipo) {
+    acciones.push(boton("Sacar del equipo", "", () => {
+      $("ficha").close();
+      guardarEquipo(equipoActual.filter((q) => q.route !== p.route).map((q) => q.route));
+    }));
+  } else if (vivo && equipoActual.length < TAMANO_EQUIPO) {
+    acciones.push(boton("Añadir al equipo", "", () => {
+      $("ficha").close();
+      guardarEquipo([...equipoActual.map((q) => q.route), p.route]);
+    }));
+  }
+  acciones.push(boton("Eliminar", "peligro", () => {
+    $("ficha").close();
+    eliminarEncuentro(p.route, `${p.nickname || p.species} (${p.route})`);
+  }));
+  $("ficha-acciones").replaceChildren(...acciones);
+  $("ficha").showModal();
+}
+
+$("cerrar-ficha").addEventListener("click", () => $("ficha").close());
+$("ficha").addEventListener("click", (evento) => {
+  if (evento.target === $("ficha")) $("ficha").close();
+});
+
+// Eliminar borra de verdad (decisión A): por eso se pide confirmación antes.
+async function eliminarEncuentro(ruta, descripcion) {
+  if (!confirm(`¿Eliminar ${descripcion}? Se borra por completo (también su muerte y su sitio en el equipo) y no se puede deshacer.`)) return;
+  mostrarMensaje("");
+  try {
+    await pedir(`/runs/${runActual}/encounters?route=${encodeURIComponent(ruta)}`, { method: "DELETE" });
+  } catch (error) {
+    mostrarMensaje(error.message);
+  }
+  await cargarRun();
+}
+
+// ---------- Nuevo encuentro (ventana) ----------
+// Nuevo encuentro: captura o fallo (la muerte se marca desde la ficha del Pokémon).
+// El mote solo tiene sentido en una captura: el campo se oculta en un fallo.
 function ajustarFormularioEvento() {
-  const tipo = $("tipo-evento").value;
-  $("campo-mote").hidden = tipo !== "captura";
-  const rutas = tipo === "muerte" ? vivosActual.map((p) => p.route) : [];
-  $("lista-rutas").replaceChildren(...rutas.map((ruta) => new Option(ruta)));
+  $("campo-mote").hidden = $("tipo-evento").value !== "captura";
 }
 
 $("abrir-registro").addEventListener("click", () => {
@@ -454,12 +550,6 @@ $("abrir-registro").addEventListener("click", () => {
 });
 
 $("tipo-evento").addEventListener("change", ajustarFormularioEvento);
-
-$("ruta").addEventListener("input", () => {
-  if ($("tipo-evento").value !== "muerte") return;
-  const vivo = vivosActual.find((p) => p.route === $("ruta").value);
-  if (vivo) $("especie").value = vivo.species;
-});
 
 $("cancelar-evento").addEventListener("click", () => $("dialogo-evento").close());
 

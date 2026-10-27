@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=b2-3c">
+  <link rel="stylesheet" href="style.css?v=b3">
 </head>
 <body>
   <header class="cabecera">
@@ -37,7 +37,7 @@
         <a class="btn" href="#/">← Partidas</a>
         <h2 id="titulo-partida"></h2>
         <div id="contadores" class="contadores"></div>
-        <button type="button" class="btn primario" id="abrir-registro">+ Registrar evento</button>
+        <button type="button" class="btn primario" id="abrir-registro">+ Nuevo encuentro</button>
       </div>
 
       <!-- Siempre tres columnas en horizontal: si no caben, la zona se desplaza hacia los lados -->
@@ -54,21 +54,19 @@
             <p id="info-cache" class="info"></p>
             <ul id="vivos" class="lista"></ul>
           </div>
-          <div class="panel-col cementerio">
-            <h2 class="titulo-panel">Cementerio</h2>
-            <ul id="cementerio" class="lista"></ul>
+          <div class="col-der">
+            <div class="panel-col cementerio">
+              <h2 class="titulo-panel">Cementerio</h2>
+              <ul id="cementerio" class="lista"></ul>
+            </div>
+            <div class="panel-col fallos">
+              <h2 class="titulo-panel">Fallos</h2>
+              <ul id="fallos" class="lista"></ul>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Provisional: el diseño no la incluye; se decide qué hacer con ella -->
-      <section class="panel provisional">
-        <h2>Capturas por ruta</h2>
-        <table>
-          <thead><tr><th>Ruta</th><th>Resultado</th><th>Especie</th></tr></thead>
-          <tbody id="rutas"></tbody>
-        </table>
-      </section>
     </section>
   </main>
 
@@ -84,20 +82,18 @@
     </form>
   </dialog>
 
-  <!-- Ventana para registrar una captura, un fallo o una muerte -->
+  <!-- Ventana para registrar un encuentro (captura o fallo); la muerte se marca desde la ficha -->
   <dialog id="dialogo-evento">
     <form id="form-evento">
-      <h3>Registrar evento</h3>
-      <label class="campo">Tipo
+      <h3>Nuevo encuentro</h3>
+      <label class="campo">Resultado
         <select id="tipo-evento">
           <option value="captura">Captura</option>
           <option value="fallo">Fallo</option>
-          <option value="muerte">Muerte</option>
         </select>
       </label>
       <label class="campo">Ruta
-        <input id="ruta" list="lista-rutas" maxlength="100" required autocomplete="off">
-        <datalist id="lista-rutas"></datalist>
+        <input id="ruta" maxlength="100" required autocomplete="off">
       </label>
       <label class="campo">Especie
         <input id="especie" list="lista-especies" maxlength="100" required autocomplete="off">
@@ -109,9 +105,25 @@
       <p id="error-evento" class="error" role="alert"></p>
       <div class="botones">
         <button type="button" class="btn" id="cancelar-evento">Cancelar</button>
-        <button type="submit" class="btn primario">Registrar</button>
+        <button type="submit" class="btn primario">Guardar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Ficha del Pokémon: datos y acciones (ha muerto, revivir, equipo, eliminar) -->
+  <dialog id="ficha" class="ficha">
+    <div class="ficha-cabecera">
+      <div id="ficha-dibujo" class="ficha-dibujo"></div>
+      <div class="ficha-datos">
+        <h3 id="ficha-nombre"></h3>
+        <p id="ficha-sub" class="ficha-sub"></p>
+        <div id="ficha-tipos" class="tipos"></div>
+        <div id="ficha-estado" class="ficha-estado"></div>
+      </div>
+      <button type="button" class="cerrar" id="cerrar-ficha" aria-label="Cerrar">✕</button>
+    </div>
+    <p id="error-ficha" class="error ficha-error" role="alert"></p>
+    <div id="ficha-acciones" class="ficha-acciones"></div>
   </dialog>
 
   <!-- Ventana para elegir un Pokémon vivo para un hueco del equipo -->
@@ -123,6 +135,6 @@
     <ul id="selector-lista" class="lista selector-lista"></ul>
   </dialog>
 
-  <script src="app.js?v=b2-3b"></script>
+  <script src="app.js?v=b3"></script>
 </body>
 </html>

@@ -166,7 +166,7 @@ def leer_equipo(run_id: int):
             existe_run(conn, run_id)
             return jsonable_encoder(
                 conn.execute(
-                    "SELECT c.route, c.species, c.created_at "
+                    "SELECT c.route, c.species, c.details->>'nickname' AS nickname, c.created_at "
                     "FROM encounters c "
                     "WHERE c.run_id = %s AND c.event_type = 'captura' "
                     "AND NOT EXISTS (SELECT 1 FROM encounters m "
@@ -306,7 +306,7 @@ def listar_eventos(run_id: int):
     with conectar() as conn:
         existe_run(conn, run_id)
         return conn.execute(
-            "SELECT id, event_type, route, species, created_at "
+            "SELECT id, event_type, route, species, details->>'nickname' AS nickname, created_at "
             "FROM encounters WHERE run_id = %s ORDER BY id",
             (run_id,),
         ).fetchall()
@@ -325,7 +325,7 @@ def cementerio(run_id: int):
     with conectar() as conn:
         existe_run(conn, run_id)
         return conn.execute(
-            "SELECT c.route, c.species, m.created_at AS muerto_en "
+            "SELECT c.route, c.species, c.details->>'nickname' AS nickname, m.created_at AS muerto_en "
             "FROM encounters c "
             "JOIN encounters m ON m.run_id = c.run_id AND m.route = c.route "
             "AND m.event_type = 'muerte' "

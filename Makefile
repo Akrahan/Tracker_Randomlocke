@@ -10,7 +10,7 @@ COMPOSE_PROD = docker compose --env-file .env.prod -f docker-compose.prod.yml
 
 .PHONY: build-dev up-dev down-dev ps-dev logs-dev clean-dev \
         build-prod up-prod down-prod ps-prod logs-prod clean-prod \
-        stop-cache start-cache stop-db start-db stop-web start-web psql-prod \n        seed-dev seed-prod reset-dev reset-prod fresh-dev fresh-prod fresh
+        stop-cache start-cache stop-db start-db stop-web start-web psql-prod \n        seed-dev seed-prod reset-dev reset-prod fresh-dev fresh-prod fresh sprites-dev sprites-prod
 
 ##@ Desarrollo (dev, puerto 8000)
 build-dev: ## Construye la imagen de web (dev) sin levantar nada
@@ -74,6 +74,14 @@ start-web: ## Arranca la web (PROD)
 psql-prod: ## Prueba de conexion a la BD de PROD: SELECT 1 y lista de tablas
 	$(COMPOSE_PROD) exec -T db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1 AS conexion_ok;" -c "\dt"'
 
+##@ Dibujos de los Pokemon
+# Descargan y recortan los dibujos (una vez) en el volumen "sprites" de cada entorno; la web los sirve en /sprites/<n>.png
+sprites-dev: ## Descarga los dibujos al volumen de DEV (solo los que falten)
+	$(COMPOSE_DEV) run --rm sprites
+
+sprites-prod: ## Descarga los dibujos al volumen de PROD (solo los que falten)
+	$(COMPOSE_PROD) run --rm sprites
+
 # Datos de demostracion (scripts/seed-demo.sh es local y no esta en el repositorio)
 ##@ Datos de demostracion
 seed-dev: ## Carga las partidas de demo en DEV (script local)
@@ -88,11 +96,13 @@ seed-prod: ## Carga las partidas de demo en PROD (script local)
 reset-dev: ## Borra datos de DEV, reconstruye, espera y carga la demo
 	$(MAKE) clean-dev
 	$(COMPOSE_DEV) up -d --build --wait
+	-$(MAKE) sprites-dev
 	$(MAKE) seed-dev
 
 reset-prod: ## Borra datos de PROD, reconstruye, espera y carga la demo
 	$(MAKE) clean-prod
 	$(COMPOSE_PROD) up -d --build --wait
+	-$(MAKE) sprites-prod
 	$(MAKE) seed-prod
 
 # Desde cero absoluto: borra contenedores, redes, VOLUMENES e IMAGENES y reconstruye todo.
@@ -104,6 +114,7 @@ fresh-dev: ## DEV desde cero absoluto: sin datos, sin imagenes, reconstruido
 	-docker image rm randomlocke-dev-web postgres:16 python:3.12-slim
 	docker builder prune -af
 	$(COMPOSE_DEV) up -d --build --wait
+	-$(MAKE) sprites-dev
 	-$(MAKE) seed-dev
 
 fresh-prod: ## PROD desde cero absoluto: sin datos, sin imagenes, reconstruido
@@ -112,6 +123,7 @@ fresh-prod: ## PROD desde cero absoluto: sin datos, sin imagenes, reconstruido
 	-docker image rm randomlocke-prod-web postgres:16 redis:7-alpine python:3.12-slim
 	docker builder prune -af
 	$(COMPOSE_PROD) up -d --build --wait
+	-$(MAKE) sprites-prod
 	-$(MAKE) seed-prod
 
 fresh: down ## PROD y DEV desde cero absoluto

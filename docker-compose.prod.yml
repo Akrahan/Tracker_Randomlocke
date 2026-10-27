@@ -57,6 +57,8 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
+    volumes:
+      - sprites:/app/static/sprites:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status', timeout=3)"]
       interval: 10s
@@ -64,8 +66,19 @@ services:
       retries: 3
       start_period: 10s
 
+  # Herramienta de un solo uso (no arranca con "up"): descarga y recorta los dibujos en el volumen "sprites".
+  # Uso: make sprites-{env}
+  sprites:
+    image: python:3.12-slim
+    profiles: ["herramientas"]
+    volumes:
+      - sprites:/sprites
+      - ./scripts/descargar_sprites.py:/descargar_sprites.py:ro
+    command: ["sh", "-c", "pip install --no-cache-dir --quiet --root-user-action=ignore pillow==11.3.0 && python /descargar_sprites.py /sprites"]
+
 volumes:
   pgdata:
+  sprites:
 
 networks:
   frontend:

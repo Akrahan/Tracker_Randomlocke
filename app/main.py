@@ -48,6 +48,8 @@ cache_estado = "ok" if CACHE_ENABLED else "no aplica"
 
 SCHEMA = Path(__file__).with_name("schema.sql")
 SPECIES = Path(__file__).with_name("species.csv")
+TYPES = Path(__file__).with_name("types.csv")
+SPECIES_TYPES = Path(__file__).with_name("species_types.csv")
 
 def conectar() -> psycopg.Connection:
     return psycopg.connect(
@@ -67,6 +69,7 @@ def inicializar_db(intentos: int = 10, espera: int = 2) -> None:
             with conectar() as conn:
                 conn.execute(esquema)
                 cargar_especies(conn)
+                cargar_tipos(conn)
             return
         except psycopg.Error:
             if intento == intentos:
@@ -82,6 +85,24 @@ def cargar_especies(conn: psycopg.Connection) -> None:
             "INSERT INTO species (id, name) VALUES (%s, %s) "
             "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
             filas,
+        )
+
+
+def cargar_tipos(conn: psycopg.Connection) -> None:
+    with TYPES.open(encoding="utf-8", newline="") as fichero:
+        tipos = [(int(f["id"]), f["identifier"], f["name"]) for f in csv.DictReader(fichero)]
+    with SPECIES_TYPES.open(encoding="utf-8", newline="") as fichero:
+        relaciones = [(int(f["species_id"]), int(f["type_id"]), int(f["slot"])) for f in csv.DictReader(fichero)]
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO types (id, identifier, name) VALUES (%s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET identifier = EXCLUDED.identifier, name = EXCLUDED.name",
+            tipos,
+        )
+        cur.executemany(
+            "INSERT INTO species_types (species_id, type_id, slot) VALUES (%s, %s, %s) "
+            "ON CONFLICT (species_id, slot) DO UPDATE SET type_id = EXCLUDED.type_id",
+            relaciones,
         )
 
 
@@ -112,6 +133,17 @@ def marcar_cache_caida() -> None:
 
 def comprobar_cache() -> str:
     return cache_estado
+
+
+# Columnas de especie para una captura "c": su número de Pokédex (para el dibujo) y sus tipos.
+# La especie se escribe como texto en la captura, así que se busca por nombre (sin distinguir mayúsculas);
+# si el nombre no está en la lista (forma rara de un randomizer), species_id y types salen null.
+COLUMNAS_ESPECIE = (
+    "(SELECT s.id FROM species s WHERE lower(s.name) = lower(c.species)) AS species_id, "
+    "(SELECT json_agg(json_build_object('identifier', t.identifier, 'name', t.name) ORDER BY st.slot) "
+    "FROM species s JOIN species_types st ON st.species_id = s.id JOIN types t ON t.id = st.type_id "
+    "WHERE lower(s.name) = lower(c.species)) AS types"
+)
 
 
 def escapar_like(texto: str) -> str:
@@ -166,7 +198,8 @@ def leer_equipo(run_id: int):
             existe_run(conn, run_id)
             return jsonable_encoder(
                 conn.execute(
-                    "SELECT c.route, c.species, c.details->>'nickname' AS nickname, c.created_at "
+                    "SELECT c.route, c.species, c.details->>'nickname' AS nickname, c.created_at, "
+                    + COLUMNAS_ESPECIE + " "
                     "FROM encounters c "
                     "WHERE c.run_id = %s AND c.event_type = 'captura' "
                     "AND NOT EXISTS (SELECT 1 FROM encounters m "
@@ -324,7 +357,8 @@ def leer_party(conn, run_id: int):
     return conn.execute(
         "SELECT p.position, c.route, c.species, c.details->>'nickname' AS nickname, "
         "NOT EXISTS (SELECT 1 FROM encounters m WHERE m.run_id = c.run_id "
-        "AND m.route = c.route AND m.event_type = 'muerte') AS alive "
+        "AND m.route = c.route AND m.event_type = 'muerte') AS alive, "
+        + COLUMNAS_ESPECIE + " "
         "FROM party p "
         "JOIN encounters c ON c.run_id = p.run_id AND c.route = p.route AND c.event_type = 'captura' "
         "WHERE p.run_id = %s ORDER BY p.position",
@@ -384,7 +418,8 @@ def cementerio(run_id: int):
     with conectar() as conn:
         existe_run(conn, run_id)
         return conn.execute(
-            "SELECT c.route, c.species, c.details->>'nickname' AS nickname, m.created_at AS muerto_en "
+            "SELECT c.route, c.species, c.details->>'nickname' AS nickname, m.created_at AS muerto_en, "
+            + COLUMNAS_ESPECIE + " "
             "FROM encounters c "
             "JOIN encounters m ON m.run_id = c.run_id AND m.route = c.route "
             "AND m.event_type = 'muerte' "

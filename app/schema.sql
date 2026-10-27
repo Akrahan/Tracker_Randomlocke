@@ -34,3 +34,16 @@ CREATE TABLE IF NOT EXISTS party (
     PRIMARY KEY (run_id, route),
     UNIQUE (run_id, position)
 );
+
+CREATE TABLE IF NOT EXISTS types (
+    id          SMALLINT PRIMARY KEY,
+    identifier  TEXT NOT NULL,
+    name        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS species_types (
+    species_id  INTEGER  NOT NULL REFERENCES species (id),
+    type_id     SMALLINT NOT NULL REFERENCES types (id),
+    slot        SMALLINT NOT NULL CHECK (slot IN (1, 2)),
+    PRIMARY KEY (species_id, slot)
+);

@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 from redis.backoff import NoBackoff
 from redis.retry import Retry
@@ -251,6 +252,7 @@ class EventoNuevo(BaseModel):
     event_type: Literal["captura", "fallo", "muerte"]
     route: str = Field(min_length=1, max_length=100)
     species: str = Field(min_length=1, max_length=100)
+    nickname: str | None = Field(default=None, max_length=20)
 
 
 @app.post("/runs/{run_id}/events", status_code=201)
@@ -273,12 +275,16 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
         if evento.event_type == "muerte" and "muerte" in previos:
             raise HTTPException(status_code=409, detail="El Pokémon de esa ruta ya murió")
 
+        detalles = None
+        if evento.event_type == "captura" and evento.nickname:
+            detalles = Jsonb({"nickname": evento.nickname})
+
         try:
             fila = conn.execute(
-                "INSERT INTO encounters (run_id, event_type, route, species) "
-                "VALUES (%s, %s, %s, %s) "
+                "INSERT INTO encounters (run_id, event_type, route, species, details) "
+                "VALUES (%s, %s, %s, %s, %s) "
                 "RETURNING id, run_id, event_type, route, species, created_at",
-                (run_id, evento.event_type, evento.route, evento.species),
+                (run_id, evento.event_type, evento.route, evento.species, detalles),
             ).fetchone()
         except psycopg.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail="Evento duplicado")

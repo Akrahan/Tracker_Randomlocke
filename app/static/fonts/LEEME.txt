@@ -1,0 +1,8 @@
+Tipografías incluidas en el proyecto (subconjunto «latin», formato woff2, descargadas de Google Fonts):
+
+- Luckiest Guy (Astigmatic). Licencia Apache 2.0: ver LuckiestGuy-LICENSE.txt.
+  Uso: título y encabezados.
+- Nunito (The Nunito Project Authors). SIL Open Font License 1.1: ver Nunito-OFL.txt.
+  Fuente variable: un solo fichero para todos los grosores (400-800). Uso: texto.
+
+Se sirven desde la propia web para no depender de Google Fonts en cada visita.

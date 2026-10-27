@@ -4,62 +4,84 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=b1">
 </head>
 <body>
-  <header>
-    <h1>Tracker Randomlocke</h1>
-    <div id="estado" class="estado">
-      <span id="estado-db" class="punto desconocido"></span>
-      <span id="estado-texto">Comprobando...</span>
-      <span id="estado-cache" class="punto desconocido"></span>
-      <span id="estado-cache-texto">Caché</span>
+  <header class="cabecera">
+    <div class="cabecera-dentro">
+      <a class="marca" href="#/" aria-label="Ir a mis partidas">
+        <span class="bola" aria-hidden="true"></span>
+        <h1 class="logo">Tracker Randomlocke</h1>
+      </a>
+      <div id="estado" class="estado">
+        <span id="estado-db" class="punto desconocido"></span>
+        <span id="estado-texto">Comprobando...</span>
+        <span id="estado-cache" class="punto desconocido"></span>
+        <span id="estado-cache-texto">Caché</span>
+      </div>
     </div>
   </header>
 
   <main>
     <p id="mensaje" role="alert"></p>
 
-    <section>
-      <h2>Partida</h2>
-      <select id="selector-run"></select>
-      <form id="form-run">
-        <input id="nombre-run" placeholder="Nombre de la nueva partida" maxlength="100" required>
-        <button>Crear</button>
-      </form>
+    <!-- Portada: las partidas como tarjetas -->
+    <section id="vista-inicio" class="vista" hidden>
+      <h2 class="titulo-seccion">Mis partidas</h2>
+      <div id="rejilla" class="rejilla"></div>
     </section>
 
-    <section id="seccion-eventos" hidden>
-      <h2>Registrar evento</h2>
-      <form id="form-evento">
-        <select id="tipo-evento">
-          <option value="captura">Captura</option>
-          <option value="fallo">Fallo</option>
-          <option value="muerte">Muerte</option>
-        </select>
-        <input id="ruta" placeholder="Ruta" maxlength="100" required>
-        <input id="especie" list="lista-especies" placeholder="Especie" maxlength="100" autocomplete="off" required>
-        <datalist id="lista-especies"></datalist>
-        <button>Registrar</button>
-      </form>
-    </section>
+    <!-- Una partida (en B2 se sustituye por las tres columnas) -->
+    <section id="vista-partida" class="vista" hidden>
+      <div class="barra">
+        <a class="btn" href="#/">← Partidas</a>
+        <h2 id="titulo-partida"></h2>
+      </div>
 
-    <section id="seccion-datos" hidden>
-      <h2>Pokémon vivos</h2>
-      <p id="info-cache" class="info"></p>
-      <ul id="vivos"></ul>
+      <section id="seccion-eventos" class="panel">
+        <h2>Registrar evento</h2>
+        <form id="form-evento">
+          <select id="tipo-evento">
+            <option value="captura">Captura</option>
+            <option value="fallo">Fallo</option>
+            <option value="muerte">Muerte</option>
+          </select>
+          <input id="ruta" placeholder="Ruta" maxlength="100" required>
+          <input id="especie" list="lista-especies" placeholder="Especie" maxlength="100" autocomplete="off" required>
+          <datalist id="lista-especies"></datalist>
+          <button class="btn primario">Registrar</button>
+        </form>
+      </section>
 
-      <h2>Capturas por ruta</h2>
-      <table>
-        <thead><tr><th>Ruta</th><th>Resultado</th><th>Especie</th></tr></thead>
-        <tbody id="rutas"></tbody>
-      </table>
+      <section id="seccion-datos" class="panel">
+        <h2>Pokémon vivos</h2>
+        <p id="info-cache" class="info"></p>
+        <ul id="vivos"></ul>
 
-      <h2>Cementerio</h2>
-      <ul id="cementerio"></ul>
+        <h2>Capturas por ruta</h2>
+        <table>
+          <thead><tr><th>Ruta</th><th>Resultado</th><th>Especie</th></tr></thead>
+          <tbody id="rutas"></tbody>
+        </table>
+
+        <h2>Cementerio</h2>
+        <ul id="cementerio"></ul>
+      </section>
     </section>
   </main>
 
-  <script src="app.js"></script>
+  <!-- Ventana para crear una partida -->
+  <dialog id="dialogo-nueva">
+    <form id="form-run" method="dialog">
+      <h3>Nueva partida</h3>
+      <input id="nombre-run" placeholder="Nombre de la partida" maxlength="100" required autocomplete="off">
+      <div class="botones">
+        <button type="button" class="btn" id="cancelar-nueva">Cancelar</button>
+        <button type="submit" class="btn primario">Crear</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js?v=b1"></script>
 </body>
 </html>

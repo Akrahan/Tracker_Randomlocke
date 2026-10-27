@@ -1,5 +1,6 @@
 import csv
 import json
+import mimetypes
 import os
 import threading
 import time
@@ -27,6 +28,9 @@ CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "false").lower() == "true"
 CACHE_HOST = os.environ.get("CACHE_HOST", "cache")
 CACHE_PASSWORD = os.environ.get("REDIS_PASSWORD")
 ENABLE_DOCS = os.environ.get("ENABLE_DOCS", "false").lower() == "true"
+
+# La imagen slim no conoce .woff2: sin esto, las tipografías se servirían como application/octet-stream.
+mimetypes.add_type("font/woff2", ".woff2")
 
 cache = (
     redis.Redis(
@@ -326,11 +330,27 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
     return fila
 
 
+VIVO = (
+    "NOT EXISTS (SELECT 1 FROM encounters m WHERE m.run_id = c.run_id "
+    "AND m.route = c.route AND m.event_type = 'muerte')"
+)
+
+
 @app.get("/runs")
 def listar_runs():
+    # Una sola consulta con todo lo que necesita la portada: contadores y el equipo de cada partida.
     with conectar() as conn:
         return conn.execute(
-            "SELECT id, name, created_at FROM runs ORDER BY id DESC"
+            "SELECT r.id, r.name, r.created_at, "
+            "(SELECT count(*) FROM encounters c WHERE c.run_id = r.id "
+            "AND c.event_type = 'captura' AND " + VIVO + ") AS alive, "
+            "(SELECT count(*) FROM encounters c WHERE c.run_id = r.id AND c.event_type = 'muerte') AS dead, "
+            "COALESCE((SELECT json_agg(json_build_object("
+            "'species_id', (SELECT s.id FROM species s WHERE lower(s.name) = lower(c.species)), "
+            "'species', c.species, 'alive', " + VIVO + ") ORDER BY p.position) "
+            "FROM party p JOIN encounters c ON c.run_id = p.run_id AND c.route = p.route "
+            "AND c.event_type = 'captura' WHERE p.run_id = r.id), '[]'::json) AS party "
+            "FROM runs r ORDER BY r.id DESC"
         ).fetchall()
 
 
@@ -442,6 +462,18 @@ def buscar_especies(
     datos, estado, ttl = leer_especies(prefijo, limit)
     poner_cabeceras_cache(response, estado, ttl, inicio)
     return datos
+
+
+@app.middleware("http")
+async def no_cachear_interfaz(request, call_next):
+    # El HTML, el JS y el CSS cambian con cada versión: el navegador debe comprobar siempre si hay uno nuevo
+    # (si no ha cambiado, el servidor responde 304 y no se descarga de nuevo). Sin esto, el navegador podía
+    # mezclar un index.html nuevo con un app.js antiguo guardado en caché y la página dejaba de funcionar.
+    respuesta = await call_next(request)
+    ruta = request.url.path
+    if ruta == "/" or ruta.endswith((".html", ".js", ".css")):
+        respuesta.headers["Cache-Control"] = "no-cache"
+    return respuesta
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).with_name("static"), html=True), name="static")

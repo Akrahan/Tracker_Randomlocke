@@ -63,23 +63,129 @@ function enviarJSON(datos) {
   };
 }
 
-function elemento(etiqueta, texto) {
+function elemento(etiqueta, texto, clase) {
   const nodo = document.createElement(etiqueta);
-  nodo.textContent = texto;
+  if (texto !== undefined) nodo.textContent = texto;
+  if (clase) nodo.className = clase;
   return nodo;
 }
 
-async function cargarRuns(seleccionar) {
+// ---------- Figuras de Pokémon (pixel art) ----------
+// Los dibujos llegan ya recortados (make sprites-*). Para que el pixel art se vea nítido se amplía por un
+// número ENTERO de píxeles reales de pantalla (teniendo en cuenta el zoom de Windows) y sin suavizado.
+// Todas usan la misma escala, así se respetan los tamaños relativos como en los juegos.
+function figura(speciesId, gris, tam, reduccion = 1) {
+  const caja = elemento("div", undefined, "figura" + (gris ? " gris" : ""));
+  caja.style.width = caja.style.height = tam * reduccion + "px";
+  if (!speciesId) {
+    caja.append(elemento("span", "?", "falta"));
+    return caja;
+  }
+  const img = new Image();
+  img.onerror = () => caja.replaceChildren(elemento("span", "?", "falta"));
+  img.onload = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const lado = Math.max(img.naturalWidth, img.naturalHeight);
+    let k = Math.max(1, Math.round((tam * dpr) / 56));
+    while (k > 1 && lado * k > tam * dpr * 1.35) k--;
+    const lienzo = Math.max(Math.round(tam * dpr), lado * k);
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = lienzo;
+    const css = (lienzo / dpr) * reduccion;
+    cv.style.width = cv.style.height = css + "px";
+    if (reduccion !== 1) cv.style.imageRendering = "pixelated";
+    if (css > tam * reduccion) cv.style.margin = `${(tam * reduccion - css) / 2}px`;
+    const cx = cv.getContext("2d");
+    cx.imageSmoothingEnabled = false;
+    const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+    cx.drawImage(img, Math.floor((lienzo - dw) / 2), Math.floor((lienzo - dh) / 2), dw, dh);
+    caja.replaceChildren(cv);
+  };
+  img.src = `/sprites/${speciesId}.png`;
+  return caja;
+}
+
+// ---------- Navegación por la dirección: #/ (portada) y #/partida/<id> ----------
+function rutaActual() {
+  const partida = location.hash.match(/^#\/partida\/(\d+)$/);
+  return partida ? { vista: "partida", id: Number(partida[1]) } : { vista: "inicio" };
+}
+
+function mostrarVista(nombre) {
+  $("vista-inicio").hidden = nombre !== "inicio";
+  $("vista-partida").hidden = nombre !== "partida";
+}
+
+// Aviso que debe sobrevivir a un cambio de vista (por ejemplo, al volver a la portada desde una partida inexistente)
+let avisoPendiente = "";
+
+async function navegar() {
+  mostrarMensaje(avisoPendiente);
+  avisoPendiente = "";
+  const ruta = rutaActual();
+  try {
+    if (ruta.vista === "partida") await abrirPartida(ruta.id);
+    else await mostrarInicio();
+  } catch (error) {
+    mostrarMensaje(error.message);
+  }
+}
+
+window.addEventListener("hashchange", navegar);
+
+// ---------- Portada ----------
+async function mostrarInicio() {
+  runActual = null;
   const runs = await pedir("/runs");
-  const selector = $("selector-run");
-  selector.replaceChildren(...runs.map((r) => new Option(r.name, r.id)));
-  if (seleccionar) selector.value = seleccionar;
+  const tarjetas = runs.map((run) => {
+    const tarjeta = elemento("button", undefined, "partida");
+    tarjeta.type = "button";
+    tarjeta.append(
+      elemento("h3", run.name),
+      elemento("div", `${run.alive} vivos · ${run.dead} muertos`, "meta")
+    );
+    const minis = elemento("div", undefined, "minis");
+    if (run.party.length) {
+      for (const p of run.party) minis.append(figura(p.species_id, !p.alive, 56, 0.8));
+    } else {
+      minis.append(elemento("span", "Aún sin equipo", "vacio"));
+    }
+    tarjeta.append(minis);
+    tarjeta.addEventListener("click", () => { location.hash = `#/partida/${run.id}`; });
+    return tarjeta;
+  });
+
+  const nueva = elemento("button", undefined, "partida nueva");
+  nueva.type = "button";
+  const contenido = elemento("span");
+  contenido.append(elemento("span", "+", "mas"), elemento("span", "Nueva partida"));
+  nueva.append(contenido);
+  nueva.addEventListener("click", () => {
+    $("nombre-run").value = "";
+    $("dialogo-nueva").showModal();
+  });
+
+  $("rejilla").replaceChildren(...tarjetas, nueva);
+  mostrarVista("inicio");
+}
+
+// ---------- Partida ----------
+async function abrirPartida(id) {
+  const runs = await pedir("/runs");
+  const run = runs.find((r) => r.id === id);
+  if (!run) {
+    avisoPendiente = "Esa partida no existe.";
+    location.hash = "#/";
+    return;
+  }
+  runActual = id;
+  $("titulo-partida").textContent = run.name;
+  mostrarVista("partida");
   await cargarRun();
 }
 
 function recuperar() {
-  mostrarMensaje("");
-  cargarRuns(runActual).catch((error) => mostrarMensaje(error.message));
+  navegar();
 }
 
 function mostrarInfoCache(cabeceras) {
@@ -94,9 +200,6 @@ function mostrarInfoCache(cabeceras) {
 }
 
 async function cargarRun() {
-  runActual = $("selector-run").value || null;
-  $("seccion-eventos").hidden = !runActual;
-  $("seccion-datos").hidden = !runActual;
   if (!runActual) return;
 
   const [equipo, eventos, muertos] = await Promise.all([
@@ -132,19 +235,20 @@ async function cargarRun() {
   );
 }
 
-$("selector-run").addEventListener("change", () => cargarRun().catch((e) => mostrarMensaje(e.message)));
-
 $("form-run").addEventListener("submit", async (evento) => {
   evento.preventDefault();
   mostrarMensaje("");
   try {
     const run = await pedir("/runs", enviarJSON({ name: $("nombre-run").value }));
-    $("nombre-run").value = "";
-    await cargarRuns(run.id);
+    $("dialogo-nueva").close();
+    location.hash = `#/partida/${run.id}`;
   } catch (error) {
+    $("dialogo-nueva").close();
     mostrarMensaje(error.message);
   }
 });
+
+$("cancelar-nueva").addEventListener("click", () => $("dialogo-nueva").close());
 
 const RETARDO_SUGERENCIAS_MS = 200;
 
@@ -188,4 +292,4 @@ $("form-evento").addEventListener("submit", async (evento) => {
   }
 });
 
-cargarRuns().catch((error) => mostrarMensaje(error.message));
+navegar();

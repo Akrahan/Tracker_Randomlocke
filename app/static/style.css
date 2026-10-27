@@ -1,75 +1,145 @@
+/* Tipografías servidas desde la propia web (ver fonts/LEEME.txt) */
+@font-face {
+  font-family: "Luckiest Guy";
+  src: url("fonts/LuckiestGuy-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Nunito";
+  src: url("fonts/Nunito-Variable.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-display: swap;
+}
+
 :root {
-  --fondo: #f4f5f7;
+  --rojo: #ee1515;
+  --rojo-osc: #b30f0f;
+  --amarillo: #ffcb05;
+  --azul: #3b4cca;
+  --azul-osc: #2a3590;
+  --tinta: #22232a;
+  --suave: #6b6f7c;
+  --fondo: #f1f3f8;
   --tarjeta: #ffffff;
-  --texto: #1f2933;
-  --borde: #d3d9e0;
-  --ok: #1a9e4b;
-  --caido: #d64545;
-  --desconocido: #9aa5b1;
-  --acento: #2b6cb0;
+  --linea: #dfe3ee;
+  --ok: #3ddc84;
+  --caido: #ff5a5a;
+  --desconocido: #b9bbc4;
+  --radio: 16px;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  font-family: "Nunito", system-ui, sans-serif;
   background: var(--fondo);
-  color: var(--texto);
+  color: var(--tinta);
 }
 
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--tarjeta);
-  border-bottom: 1px solid var(--borde);
+button, input, select { font: inherit; }
+
+/* ---------- Cabecera ---------- */
+.cabecera { position: relative; background: var(--rojo); border-bottom: 6px solid var(--tinta); overflow: hidden; }
+.cabecera::before {
+  content: ""; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle at center, #fff 0 22%, var(--tinta) 22% 28%, #fff 28% 100%); opacity: .18;
+}
+.cabecera-dentro {
+  position: relative; max-width: 1180px; margin: 0 auto; padding: 16px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.marca { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+.logo {
+  margin: 0; font-family: "Luckiest Guy", Impact, sans-serif; font-weight: 400;
+  font-size: clamp(28px, 6vw, 52px); line-height: 1; letter-spacing: 2px;
+  color: var(--amarillo); -webkit-text-stroke: 7px var(--azul); paint-order: stroke fill;
+  text-shadow: 0 5px 0 var(--azul-osc);
+}
+.bola {
+  width: 44px; height: 44px; flex: none; position: relative; border-radius: 50%; border: 4px solid var(--tinta);
+  background: linear-gradient(var(--rojo-osc) 0 46%, var(--tinta) 46% 54%, #fff 54% 100%);
+}
+.bola::after {
+  content: ""; position: absolute; inset: 50% auto auto 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  background: #fff; border: 3px solid var(--tinta); border-radius: 50%;
 }
 
-h1 { font-size: 1.1rem; margin: 0; }
-h2 { font-size: 1rem; margin: 16px 0 8px; }
-
-main { max-width: 640px; margin: 0 auto; padding: 16px; }
-
-section {
-  background: var(--tarjeta);
-  border: 1px solid var(--borde);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-}
-
-form, select { margin: 8px 0; }
-
-input, select, button {
-  font: inherit;
-  padding: 8px;
-  border: 1px solid var(--borde);
-  border-radius: 6px;
-}
-
-input, select { width: 100%; margin-bottom: 8px; }
-
-button {
-  background: var(--acento);
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borde); }
-
-ul { padding-left: 20px; margin: 4px 0; }
-
-.estado { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
-.punto { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.estado { margin-left: auto; display: flex; align-items: center; gap: 6px; color: #fff; font-weight: 800; font-size: 13px; }
+.punto { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid #fff; }
 .punto.ok { background: var(--ok); }
 .punto.caido { background: var(--caido); }
 .punto.desconocido { background: var(--desconocido); }
 #estado-cache { margin-left: 10px; }
 
-#mensaje { min-height: 1.2em; color: var(--caido); margin: 4px 0 0; }
+/* ---------- Estructura ---------- */
+main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
+#mensaje { min-height: 1.2em; margin: 0 0 8px; color: var(--rojo-osc); font-weight: 700; }
+.vista[hidden] { display: none; }
+.titulo-seccion {
+  margin: 0 0 12px; font-family: "Luckiest Guy", sans-serif; font-weight: 400; letter-spacing: 1px;
+  font-size: 24px; color: var(--azul-osc);
+}
 
-.info { font-size: 0.8rem; color: var(--desconocido); margin: 0 0 6px; }
+.btn {
+  display: inline-block; border: 2px solid var(--tinta); background: #fff; color: var(--tinta); border-radius: 999px;
+  padding: 8px 16px; font-weight: 800; box-shadow: 0 3px 0 var(--tinta); cursor: pointer; text-decoration: none;
+}
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--tinta); }
+.btn.primario { background: var(--amarillo); }
+
+/* ---------- Portada: tarjetas de partidas ---------- */
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.partida {
+  text-align: left; background: var(--tarjeta); border: 2px solid var(--linea); border-top: 8px solid var(--azul);
+  border-radius: var(--radio); padding: 16px 16px 14px; color: var(--tinta); cursor: pointer;
+  transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.partida:hover, .partida:focus-visible {
+  transform: translateY(-4px); box-shadow: 0 10px 22px rgba(34, 35, 42, .14); border-color: var(--azul); outline: none;
+}
+.partida h3 { margin: 0 0 4px; font-size: 20px; font-weight: 800; overflow-wrap: anywhere; }
+.partida .meta { color: var(--suave); font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.minis { display: flex; align-items: flex-end; min-height: 56px; padding: 0 2px; }
+.minis .figura { margin-right: 10px; }
+.partida.nueva {
+  border: 3px dashed var(--azul); background: transparent; min-height: 148px;
+  display: grid; place-items: center; color: var(--azul); font-weight: 800; font-size: 18px; text-align: center;
+}
+.partida.nueva .mas { display: block; font-size: 38px; line-height: 1; }
+.vacio { color: var(--suave); font-size: 13px; }
+
+/* Figuras de Pokémon (pixel art): el canvas ya trae la escala entera, sin suavizado */
+.figura { display: grid; place-items: center; flex: none; }
+.figura canvas { display: block; }
+.figura.gris canvas { filter: grayscale(1) brightness(.85); opacity: .7; }
+.figura .falta { font-weight: 800; color: var(--suave); }
+
+/* ---------- Vista de partida (provisional hasta B2) ---------- */
+.barra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.barra h2 { margin: 0; font-size: 28px; font-weight: 800; overflow-wrap: anywhere; }
+.panel {
+  background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio);
+  padding: 12px 16px; margin-bottom: 16px; max-width: 720px;
+}
+.panel h2 { font-size: 1rem; margin: 12px 0 8px; }
+.panel input, .panel select {
+  width: 100%; margin-bottom: 8px; padding: 8px 10px; border: 2px solid var(--linea); border-radius: 10px; background: #fff;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--linea); }
+ul { padding-left: 20px; margin: 4px 0; }
+.info { font-size: .8rem; color: var(--suave); margin: 0 0 6px; }
+
+/* ---------- Ventana «Nueva partida» ---------- */
+dialog {
+  border: 0; border-radius: 20px; padding: 0; width: min(420px, 92vw);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .4); color: var(--tinta);
+}
+dialog::backdrop { background: rgba(20, 22, 40, .6); }
+dialog form { padding: 18px; }
+dialog h3 { margin: 0 0 12px; font-family: "Luckiest Guy", sans-serif; font-weight: 400; font-size: 24px; color: var(--azul-osc); }
+dialog input { width: 100%; padding: 10px 12px; border: 2px solid var(--linea); border-radius: 10px; }
+dialog input:focus { outline: none; border-color: var(--azul); }
+.botones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }

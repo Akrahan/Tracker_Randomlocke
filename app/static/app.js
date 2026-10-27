@@ -233,17 +233,112 @@ function pintarLista(lista, pokemons, muertos, textoVacio) {
   lista.replaceChildren(...filas);
 }
 
+// ---------- Equipo (Pokédex) ----------
+const TAMANO_EQUIPO = 6;
+let equipoActual = [];  // lo que devuelve GET /party: posición, ruta, especie, mote, alive, species_id
+let vivosActual = [];   // lo que devuelve GET /team: todos los vivos (equipo y PC)
+
+// El equipo se guarda entero con PUT /party (una lista de rutas, máximo 6); la API valida
+// y la base de datos garantiza que no haya más de 6 ni repetidos.
+async function guardarEquipo(rutas) {
+  mostrarMensaje("");
+  try {
+    await pedir(`/runs/${runActual}/party`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routes: rutas }),
+    });
+  } catch (error) {
+    mostrarMensaje(error.message);
+  }
+  await cargarRun();
+}
+
+function pintarEquipo() {
+  const casillas = equipoActual.map((p) => {
+    // La casilla no es un <button> porque dentro lleva otro botón (el «−»); se hace accesible con role y tabindex.
+    const casilla = elemento("div", undefined, "slot" + (p.alive ? "" : " muerto"));
+    casilla.tabIndex = 0;
+    casilla.setAttribute("role", "button");
+    casilla.setAttribute("aria-label", `${p.nickname || p.species}, ${p.route}`);
+
+    const quitar = elemento("button", "−", "quitar");
+    quitar.type = "button";
+    quitar.title = "Sacar del equipo";
+    quitar.setAttribute("aria-label", `Sacar a ${p.nickname || p.species} del equipo`);
+    quitar.addEventListener("click", (evento) => {
+      evento.stopPropagation(); // que no cuente como pulsar la casilla (en B3 abrirá la ficha)
+      guardarEquipo(equipoActual.filter((q) => q.route !== p.route).map((q) => q.route));
+    });
+
+    // Sin mote, la especie hace de nombre; debajo, siempre la ruta.
+    casilla.append(
+      quitar,
+      figura(p.species_id, !p.alive, 80),
+      elemento("div", p.nickname || p.species, "mote"),
+      elemento("div", p.route, "ruta")
+    );
+    return casilla;
+  });
+
+  for (let i = casillas.length; i < TAMANO_EQUIPO; i++) {
+    const hueco = elemento("button", "+", "hueco");
+    hueco.type = "button";
+    hueco.setAttribute("aria-label", "Hueco libre: añadir un Pokémon al equipo");
+    hueco.append(elemento("small", "Añadir"));
+    hueco.addEventListener("click", abrirSelector);
+    casillas.push(hueco);
+  }
+  $("equipo").replaceChildren(...casillas);
+}
+
+function abrirSelector() {
+  const enEquipo = new Set(equipoActual.map((p) => p.route));
+  const libres = vivosActual.filter((p) => !enEquipo.has(p.route));
+  const opciones = libres.map((p) => {
+    const opcion = elemento("button", undefined, "fila opcion");
+    opcion.type = "button";
+    const texto = elemento("div", undefined, "texto");
+    texto.append(
+      elemento("div", p.nickname || p.species, "mote"),
+      elemento("div", p.nickname ? p.species : "", "esp"),
+      elemento("div", p.route, "ruta")
+    );
+    opcion.append(texto, figura(p.species_id, false, 64, 1, true));
+    opcion.addEventListener("click", () => {
+      $("selector").close();
+      guardarEquipo([...equipoActual.map((q) => q.route), p.route]);
+    });
+    const li = elemento("li");
+    li.append(opcion);
+    return li;
+  });
+  if (!opciones.length) opciones.push(elemento("li", "No hay Pokémon vivos fuera del equipo.", "vacio"));
+  $("selector-lista").replaceChildren(...opciones);
+  $("selector").showModal();
+}
+
+$("cerrar-selector").addEventListener("click", () => $("selector").close());
+// Pulsar fuera de la ventana (en el fondo oscuro) también la cierra
+$("selector").addEventListener("click", (evento) => {
+  if (evento.target === $("selector")) $("selector").close();
+});
+
 async function cargarRun() {
   if (!runActual) return;
 
-  const [equipo, eventos, muertos] = await Promise.all([
+  const [equipo, eventos, muertos, party] = await Promise.all([
     pedirConCabeceras(`/runs/${runActual}/team`),
     pedir(`/runs/${runActual}/encounters`),
     pedir(`/runs/${runActual}/graveyard`),
+    pedir(`/runs/${runActual}/party`),
   ]);
 
   const vivos = equipo.cuerpo;
   mostrarInfoCache(equipo.cabeceras);
+  vivosActual = vivos;
+  equipoActual = party;
+  pintarEquipo();
 
   const capturas = eventos.filter((e) => e.event_type === "captura").length;
   $("contadores").replaceChildren(

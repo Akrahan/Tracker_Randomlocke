@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=b2-1">
+  <link rel="stylesheet" href="style.css?v=b2-2">
 </head>
 <body>
   <header class="cabecera">
@@ -45,7 +45,7 @@
           <div class="col-izq">
             <div class="panel-pokedex">
               <h2 class="titulo-panel">Equipo actual</h2>
-              <p class="pendiente">El equipo llega en la siguiente pieza (B2.2).</p>
+              <div id="equipo" class="equipo"></div>
             </div>
           </div>
           <div class="panel-col">
@@ -99,6 +99,15 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=b2-1"></script>
+  <!-- Ventana para elegir un Pokémon vivo para un hueco del equipo -->
+  <dialog id="selector" class="selector">
+    <div class="selector-cabecera">
+      <h3>Elige un Pokémon</h3>
+      <button type="button" class="cerrar" id="cerrar-selector" aria-label="Cerrar">✕</button>
+    </div>
+    <ul id="selector-lista" class="lista selector-lista"></ul>
+  </dialog>
+
+  <script src="app.js?v=b2-2"></script>
 </body>
 </html>

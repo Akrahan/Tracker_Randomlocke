@@ -297,6 +297,18 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
     with conectar() as conn:
         existe_run(conn, run_id)
 
+        # Solo especies que existen: se busca sin distinguir mayúsculas y se guarda con el nombre oficial
+        # («pikachu» → «Pikachu»). Así no se cuelan especies inventadas ni erratas.
+        especie = conn.execute(
+            "SELECT name FROM species WHERE lower(name) = lower(%s)", (evento.species,)
+        ).fetchone()
+        if especie is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"«{evento.species}» no es una especie de la lista. Elige una de las sugerencias.",
+            )
+        nombre_especie = especie["name"]
+
         previos = {
             fila["event_type"]
             for fila in conn.execute(
@@ -311,6 +323,15 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
             raise HTTPException(status_code=409, detail="No hay ninguna captura en esa ruta")
         if evento.event_type == "muerte" and "muerte" in previos:
             raise HTTPException(status_code=409, detail="El Pokémon de esa ruta ya murió")
+        if evento.event_type == "muerte":
+            capturado = conn.execute(
+                "SELECT species FROM encounters WHERE run_id = %s AND route = %s AND event_type = 'captura'",
+                (run_id, evento.route),
+            ).fetchone()["species"]
+            if capturado.lower() != nombre_especie.lower():
+                raise HTTPException(
+                    status_code=409, detail=f"En esa ruta se capturó un {capturado}, no un {nombre_especie}"
+                )
 
         detalles = None
         if evento.event_type == "captura" and evento.nickname:
@@ -321,7 +342,7 @@ def registrar_evento(run_id: int, evento: EventoNuevo):
                 "INSERT INTO encounters (run_id, event_type, route, species, details) "
                 "VALUES (%s, %s, %s, %s, %s) "
                 "RETURNING id, run_id, event_type, route, species, created_at",
-                (run_id, evento.event_type, evento.route, evento.species, detalles),
+                (run_id, evento.event_type, evento.route, nombre_especie, detalles),
             ).fetchone()
         except psycopg.errors.UniqueViolation:
             raise HTTPException(status_code=409, detail="Evento duplicado")

@@ -5,7 +5,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import psycopg
 import redis
@@ -318,6 +318,65 @@ def equipo_activo(run_id: int, response: Response):
     datos, estado, ttl = leer_equipo(run_id)
     poner_cabeceras_cache(response, estado, ttl, inicio)
     return datos
+
+
+def leer_party(conn, run_id: int):
+    return conn.execute(
+        "SELECT p.position, c.route, c.species, c.details->>'nickname' AS nickname, "
+        "NOT EXISTS (SELECT 1 FROM encounters m WHERE m.run_id = c.run_id "
+        "AND m.route = c.route AND m.event_type = 'muerte') AS alive "
+        "FROM party p "
+        "JOIN encounters c ON c.run_id = p.run_id AND c.route = p.route AND c.event_type = 'captura' "
+        "WHERE p.run_id = %s ORDER BY p.position",
+        (run_id,),
+    ).fetchall()
+
+
+class EquipoNuevo(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    routes: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(max_length=6)
+
+
+@app.get("/runs/{run_id}/party")
+def equipo(run_id: int):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        return leer_party(conn, run_id)
+
+
+@app.put("/runs/{run_id}/party")
+def cambiar_equipo(run_id: int, equipo: EquipoNuevo):
+    if len(set(equipo.routes)) != len(equipo.routes):
+        raise HTTPException(status_code=409, detail="Un Pokémon no puede estar dos veces en el equipo")
+
+    with conectar() as conn:
+        existe_run(conn, run_id)
+
+        capturas = {
+            fila["route"]: fila["vivo"]
+            for fila in conn.execute(
+                "SELECT c.route, NOT EXISTS (SELECT 1 FROM encounters m WHERE m.run_id = c.run_id "
+                "AND m.route = c.route AND m.event_type = 'muerte') AS vivo "
+                "FROM encounters c WHERE c.run_id = %s AND c.event_type = 'captura'",
+                (run_id,),
+            )
+        }
+        actuales = {fila["route"] for fila in conn.execute("SELECT route FROM party WHERE run_id = %s", (run_id,))}
+
+        for ruta in equipo.routes:
+            if ruta not in capturas:
+                raise HTTPException(status_code=409, detail=f"No hay ninguna captura en «{ruta}»")
+            if not capturas[ruta] and ruta not in actuales:
+                raise HTTPException(status_code=409, detail=f"El Pokémon de «{ruta}» está muerto")
+
+        conn.execute("DELETE FROM party WHERE run_id = %s", (run_id,))
+        for posicion, ruta in enumerate(equipo.routes, start=1):
+            conn.execute(
+                "INSERT INTO party (run_id, route, position) VALUES (%s, %s, %s)",
+                (run_id, ruta, posicion),
+            )
+        return leer_party(conn, run_id)
 
 
 @app.get("/runs/{run_id}/graveyard")

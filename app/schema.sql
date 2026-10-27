@@ -26,3 +26,11 @@ CREATE TABLE IF NOT EXISTS species (
 
 CREATE INDEX IF NOT EXISTS idx_species_nombre
     ON species (lower(name) text_pattern_ops);
+
+CREATE TABLE IF NOT EXISTS party (
+    run_id    BIGINT   NOT NULL REFERENCES runs (id),
+    route     TEXT     NOT NULL,
+    position  SMALLINT NOT NULL CHECK (position BETWEEN 1 AND 6),
+    PRIMARY KEY (run_id, route),
+    UNIQUE (run_id, position)
+);

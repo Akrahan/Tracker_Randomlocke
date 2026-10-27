@@ -115,6 +115,29 @@ function figura(speciesId, gris, tam, reduccion = 1, encajada = false) {
   return caja;
 }
 
+// Miniatura de tamaño fijo (portada): el lado más largo de TODOS los dibujos mide lo mismo, así se ven
+// todos por igual (un Pichu igual de visible que un Onix). Como el factor casi nunca es entero, se escala con
+// «vecino más próximo» (pixelated): el pixel art sigue nítido, aunque algún píxel pueda salir algo más fino.
+function miniatura(speciesId, gris, lado) {
+  const caja = elemento("div", undefined, "figura" + (gris ? " gris" : ""));
+  caja.style.width = caja.style.height = lado + "px";
+  if (!speciesId) {
+    caja.append(elemento("span", "?", "falta"));
+    return caja;
+  }
+  const img = new Image();
+  img.onerror = () => caja.replaceChildren(elemento("span", "?", "falta"));
+  img.onload = () => {
+    const f = lado / Math.max(img.naturalWidth, img.naturalHeight);
+    img.width = Math.round(img.naturalWidth * f);
+    img.height = Math.round(img.naturalHeight * f);
+    img.style.imageRendering = "pixelated";
+    caja.replaceChildren(img);
+  };
+  img.src = `/sprites/${speciesId}.png`;
+  return caja;
+}
+
 // ---------- Navegación por la dirección: #/ (portada) y #/partida/<id> ----------
 function rutaActual() {
   const partida = location.hash.match(/^#\/partida\/(\d+)$/);
@@ -144,6 +167,7 @@ async function navegar() {
 window.addEventListener("hashchange", navegar);
 
 // ---------- Portada ----------
+const TAMANO_MINIATURA = 44; // px: lado más largo de cada Pokémon en las tarjetas
 async function mostrarInicio() {
   runActual = null;
   const runs = await pedir("/runs");
@@ -156,7 +180,7 @@ async function mostrarInicio() {
     );
     const minis = elemento("div", undefined, "minis");
     if (run.party.length) {
-      for (const p of run.party) minis.append(figura(p.species_id, !p.alive, 56, 0.8));
+      for (const p of run.party) minis.append(miniatura(p.species_id, !p.alive, TAMANO_MINIATURA));
     } else {
       minis.append(elemento("span", "Aún sin equipo", "vacio"));
     }
@@ -411,19 +435,47 @@ $("especie").addEventListener("input", () => {
   temporizadorSugerencias = setTimeout(cargarSugerencias, RETARDO_SUGERENCIAS_MS);
 });
 
+// ---------- Registrar evento (ventana) ----------
+// El mote solo tiene sentido en una captura (la API lo ignora en fallos y muertes): el campo se oculta en los demás.
+// En una muerte, la ruta sugiere las de los Pokémon vivos y, al elegir una, rellena la especie.
+function ajustarFormularioEvento() {
+  const tipo = $("tipo-evento").value;
+  $("campo-mote").hidden = tipo !== "captura";
+  const rutas = tipo === "muerte" ? vivosActual.map((p) => p.route) : [];
+  $("lista-rutas").replaceChildren(...rutas.map((ruta) => new Option(ruta)));
+}
+
+$("abrir-registro").addEventListener("click", () => {
+  $("form-evento").reset();
+  $("error-evento").textContent = "";
+  ajustarFormularioEvento();
+  $("dialogo-evento").showModal();
+  $("ruta").focus();
+});
+
+$("tipo-evento").addEventListener("change", ajustarFormularioEvento);
+
+$("ruta").addEventListener("input", () => {
+  if ($("tipo-evento").value !== "muerte") return;
+  const vivo = vivosActual.find((p) => p.route === $("ruta").value);
+  if (vivo) $("especie").value = vivo.species;
+});
+
+$("cancelar-evento").addEventListener("click", () => $("dialogo-evento").close());
+
 $("form-evento").addEventListener("submit", async (evento) => {
   evento.preventDefault();
-  mostrarMensaje("");
+  $("error-evento").textContent = "";
+  const datos = { event_type: $("tipo-evento").value, route: $("ruta").value, species: $("especie").value };
+  const mote = $("mote").value.trim();
+  if (datos.event_type === "captura" && mote) datos.nickname = mote;
   try {
-    await pedir(
-      `/runs/${runActual}/events`,
-      enviarJSON({ event_type: $("tipo-evento").value, route: $("ruta").value, species: $("especie").value })
-    );
-    $("ruta").value = "";
-    $("especie").value = "";
+    await pedir(`/runs/${runActual}/events`, enviarJSON(datos));
+    $("dialogo-evento").close();
     await cargarRun();
   } catch (error) {
-    mostrarMensaje(error.message);
+    // El error se enseña dentro de la ventana, que sigue abierta para corregir el dato
+    $("error-evento").textContent = error.message;
   }
 });
 

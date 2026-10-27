@@ -101,8 +101,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 }
 .partida h3 { margin: 0 0 4px; font-size: 20px; font-weight: 800; overflow-wrap: anywhere; }
 .partida .meta { color: var(--suave); font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-.minis { display: flex; align-items: flex-end; min-height: 56px; padding: 0 2px; }
-.minis .figura { margin-right: 10px; }
+/* 6 miniaturas de 44 px + 5 huecos de 8 px = 304 px: caben incluso en una tarjeta de anchura mínima (340 px) */
+.minis { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 2px; }
 .partida.nueva {
   border: 3px dashed var(--azul); background: transparent; min-height: 148px;
   display: grid; place-items: center; color: var(--azul); font-weight: 800; font-size: 18px; text-align: center;
@@ -113,7 +113,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 /* Figuras de Pokémon (pixel art): el canvas ya trae la escala entera, sin suavizado */
 .figura { display: grid; place-items: center; flex: none; }
 .figura canvas { display: block; }
-.figura.gris canvas { filter: grayscale(1) brightness(.85); opacity: .7; }
+.figura.gris canvas, .figura.gris img { filter: grayscale(1) brightness(.85); opacity: .7; }
 .figura .falta { font-weight: 800; color: var(--suave); }
 
 /* ---------- Vista de partida ---------- */
@@ -214,7 +214,7 @@ dialog.selector { width: min(460px, 94vw); }
 .cuadro { background: #fff; border: 2px solid var(--linea); border-radius: 14px; overflow: hidden; }
 .lista .vacio { padding: 6px 4px; }
 
-/* Bloques provisionales (formulario y tabla) hasta B2.3 */
+/* Bloque provisional (tabla «Capturas por ruta»), pendiente de decidir */
 .panel {
   background: var(--tarjeta); border: 2px solid var(--linea); border-radius: var(--radio);
   padding: 12px 16px; margin-top: 16px; max-width: 720px;
@@ -239,3 +239,17 @@ dialog h3 { margin: 0 0 12px; font-family: "Luckiest Guy", sans-serif; font-weig
 dialog input { width: 100%; padding: 10px 12px; border: 2px solid var(--linea); border-radius: 10px; }
 dialog input:focus { outline: none; border-color: var(--azul); }
 .botones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+
+/* Ventana «Registrar evento» */
+.campo {
+  display: grid; gap: 4px; margin-bottom: 10px; font-weight: 800; font-size: 12px;
+  color: var(--suave); text-transform: uppercase; letter-spacing: .4px;
+}
+.campo input, .campo select {
+  width: 100%; padding: 9px 11px; border: 2px solid var(--linea); border-radius: 10px; background: #fff;
+  color: var(--tinta); font-size: 15px; font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+.campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+.campo[hidden] { display: none; }
+.opcional { text-transform: none; font-weight: 600; }
+.error { min-height: 1.2em; margin: 0; color: var(--rojo-osc); font-weight: 700; font-size: 14px; }

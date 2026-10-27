@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=b2-2">
+  <link rel="stylesheet" href="style.css?v=b2-3c">
 </head>
 <body>
   <header class="cabecera">
@@ -37,6 +37,7 @@
         <a class="btn" href="#/">← Partidas</a>
         <h2 id="titulo-partida"></h2>
         <div id="contadores" class="contadores"></div>
+        <button type="button" class="btn primario" id="abrir-registro">+ Registrar evento</button>
       </div>
 
       <!-- Siempre tres columnas en horizontal: si no caben, la zona se desplaza hacia los lados -->
@@ -59,22 +60,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Provisional hasta B2.3: el formulario pasará a una ventana con campo de mote -->
-      <section id="seccion-eventos" class="panel provisional">
-        <h2>Registrar evento</h2>
-        <form id="form-evento">
-          <select id="tipo-evento">
-            <option value="captura">Captura</option>
-            <option value="fallo">Fallo</option>
-            <option value="muerte">Muerte</option>
-          </select>
-          <input id="ruta" placeholder="Ruta" maxlength="100" required>
-          <input id="especie" list="lista-especies" placeholder="Especie" maxlength="100" autocomplete="off" required>
-          <datalist id="lista-especies"></datalist>
-          <button class="btn primario">Registrar</button>
-        </form>
-      </section>
 
       <!-- Provisional: el diseño no la incluye; se decide qué hacer con ella -->
       <section class="panel provisional">
@@ -99,6 +84,36 @@
     </form>
   </dialog>
 
+  <!-- Ventana para registrar una captura, un fallo o una muerte -->
+  <dialog id="dialogo-evento">
+    <form id="form-evento">
+      <h3>Registrar evento</h3>
+      <label class="campo">Tipo
+        <select id="tipo-evento">
+          <option value="captura">Captura</option>
+          <option value="fallo">Fallo</option>
+          <option value="muerte">Muerte</option>
+        </select>
+      </label>
+      <label class="campo">Ruta
+        <input id="ruta" list="lista-rutas" maxlength="100" required autocomplete="off">
+        <datalist id="lista-rutas"></datalist>
+      </label>
+      <label class="campo">Especie
+        <input id="especie" list="lista-especies" maxlength="100" required autocomplete="off">
+        <datalist id="lista-especies"></datalist>
+      </label>
+      <label class="campo" id="campo-mote"><span>Mote <span class="opcional">(opcional)</span></span>
+        <input id="mote" maxlength="20" autocomplete="off">
+      </label>
+      <p id="error-evento" class="error" role="alert"></p>
+      <div class="botones">
+        <button type="button" class="btn" id="cancelar-evento">Cancelar</button>
+        <button type="submit" class="btn primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Ventana para elegir un Pokémon vivo para un hueco del equipo -->
   <dialog id="selector" class="selector">
     <div class="selector-cabecera">
@@ -108,6 +123,6 @@
     <ul id="selector-lista" class="lista selector-lista"></ul>
   </dialog>
 
-  <script src="app.js?v=b2-2"></script>
+  <script src="app.js?v=b2-3b"></script>
 </body>
 </html>

@@ -47,3 +47,30 @@ CREATE TABLE IF NOT EXISTS species_types (
     slot        SMALLINT NOT NULL CHECK (slot IN (1, 2)),
     PRIMARY KEY (species_id, slot)
 );
+
+CREATE TABLE IF NOT EXISTS natures (
+    id         SMALLINT PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    increased  TEXT,
+    decreased  TEXT
+);
+
+-- Ficha editable de cada Pokémon capturado (una fila por partida y ruta). Es un dato que cambia,
+-- no un hecho histórico: se modifica con upsert en lugar de añadirse al registro de eventos.
+CREATE TABLE IF NOT EXISTS pokemon_ficha (
+    run_id      BIGINT   NOT NULL REFERENCES runs (id),
+    route       TEXT     NOT NULL,
+    level       SMALLINT CHECK (level BETWEEN 1 AND 100),
+    nature_id   SMALLINT REFERENCES natures (id),
+    ability     TEXT,
+    item        TEXT,
+    moves       TEXT[]   NOT NULL DEFAULT '{}' CHECK (cardinality(moves) <= 4),
+    hp          SMALLINT CHECK (hp BETWEEN 1 AND 999),
+    attack      SMALLINT CHECK (attack BETWEEN 1 AND 999),
+    defense     SMALLINT CHECK (defense BETWEEN 1 AND 999),
+    sp_attack   SMALLINT CHECK (sp_attack BETWEEN 1 AND 999),
+    sp_defense  SMALLINT CHECK (sp_defense BETWEEN 1 AND 999),
+    speed       SMALLINT CHECK (speed BETWEEN 1 AND 999),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, route)
+);

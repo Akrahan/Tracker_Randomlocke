@@ -242,7 +242,7 @@ dialog input:focus { outline: none; border-color: var(--azul); }
 .botones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 
 /* ---------- Ficha del Pokémon ---------- */
-dialog.ficha { width: min(520px, 94vw); }
+dialog.ficha { width: min(760px, 94vw); max-height: 92vh; }
 .ficha-cabecera {
   display: flex; gap: 16px; align-items: center; padding: 18px;
   background: linear-gradient(120deg, var(--azul) 0 60%, var(--azul-osc)); color: #fff;
@@ -257,7 +257,32 @@ dialog.ficha { width: min(520px, 94vw); }
 .marca-estado { background: rgba(255, 255, 255, .2); padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
 .marca-estado.muerto { background: var(--rojo); }
 .ficha .cerrar { align-self: flex-start; }
-.ficha-error { padding: 10px 18px 0; }
+.ficha-error { padding: 0 18px; }
+
+/* Cuerpo editable de la ficha (C1): datos y ataques a la izquierda, estadísticas a la derecha */
+.ficha-cuerpo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; padding: 16px 18px 6px; }
+@media (max-width: 640px) { .ficha-cuerpo { grid-template-columns: 1fr; } }
+.ficha-cuerpo h4 {
+  margin: 4px 0 8px; font-family: "Luckiest Guy", sans-serif; font-weight: 400; font-size: 17px;
+  letter-spacing: .5px; color: var(--azul-osc);
+}
+.doble { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ataques { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ataques input, .stat input {
+  width: 100%; padding: 8px 10px; border: 2px solid var(--linea); border-radius: 10px;
+  font-weight: 700; color: var(--tinta); background: #fff;
+}
+.ataques input:focus, .stat input:focus { outline: none; border-color: var(--azul); }
+.stat { display: grid; grid-template-columns: 78px 1fr 70px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.stat-nombre { font-weight: 800; font-size: 13px; }
+.stat.sube .stat-nombre::after { content: " ▲"; color: #d33; }
+.stat.baja .stat-nombre::after { content: " ▼"; color: #36c; }
+.barra-stat { height: 12px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 999px; overflow: hidden; }
+.barra-stat i { display: block; height: 100%; width: 0; background: var(--azul); border-radius: 999px; transition: width .2s; }
+.stat input { text-align: right; padding: 5px 8px; }
+.pista { margin: 2px 0 0; font-size: 12px; color: var(--suave); }
+.guardar-ficha { grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.estado-guardado { color: #1a9e4b; font-weight: 800; font-size: 14px; }
 .ficha-acciones { display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 18px 18px; }
 .btn.peligro { margin-left: auto; color: var(--rojo-osc); border-color: var(--rojo-osc); box-shadow: 0 3px 0 var(--rojo-osc); }
 

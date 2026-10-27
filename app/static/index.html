@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=b3">
+  <link rel="stylesheet" href="style.css?v=c1">
 </head>
 <body>
   <header class="cabecera">
@@ -122,6 +122,63 @@
       </div>
       <button type="button" class="cerrar" id="cerrar-ficha" aria-label="Cerrar">✕</button>
     </div>
+    <!-- Datos editables (C1): mote, ruta y tipo NO se editan aquí -->
+    <form id="form-ficha" class="ficha-cuerpo">
+      <div>
+        <h4>Datos</h4>
+        <div class="doble">
+          <label class="campo">Nivel<input id="f-nivel" type="number" min="1" max="100"></label>
+          <label class="campo">Naturaleza<select id="f-naturaleza"><option value="">—</option></select></label>
+        </div>
+        <label class="campo">Habilidad<input id="f-habilidad" maxlength="50" autocomplete="off"></label>
+        <label class="campo">Objeto<input id="f-objeto" maxlength="50" autocomplete="off"></label>
+        <h4>Ataques</h4>
+        <div class="ataques">
+          <input id="f-ataque-0" class="ataque" maxlength="50" placeholder="Ataque 1" aria-label="Ataque 1" autocomplete="off">
+          <input id="f-ataque-1" class="ataque" maxlength="50" placeholder="Ataque 2" aria-label="Ataque 2" autocomplete="off">
+          <input id="f-ataque-2" class="ataque" maxlength="50" placeholder="Ataque 3" aria-label="Ataque 3" autocomplete="off">
+          <input id="f-ataque-3" class="ataque" maxlength="50" placeholder="Ataque 4" aria-label="Ataque 4" autocomplete="off">
+        </div>
+      </div>
+      <div>
+        <h4>Estadísticas</h4>
+          <div class="stat" data-stat="hp">
+            <span class="stat-nombre">PS</span>
+            <span class="barra-stat"><i id="b-hp"></i></span>
+            <input id="f-hp" type="number" min="1" max="999" aria-label="PS">
+          </div>
+          <div class="stat" data-stat="attack">
+            <span class="stat-nombre">Ataque</span>
+            <span class="barra-stat"><i id="b-attack"></i></span>
+            <input id="f-attack" type="number" min="1" max="999" aria-label="Ataque">
+          </div>
+          <div class="stat" data-stat="defense">
+            <span class="stat-nombre">Defensa</span>
+            <span class="barra-stat"><i id="b-defense"></i></span>
+            <input id="f-defense" type="number" min="1" max="999" aria-label="Defensa">
+          </div>
+          <div class="stat" data-stat="sp_attack">
+            <span class="stat-nombre">At. Esp.</span>
+            <span class="barra-stat"><i id="b-sp_attack"></i></span>
+            <input id="f-sp_attack" type="number" min="1" max="999" aria-label="At. Esp.">
+          </div>
+          <div class="stat" data-stat="sp_defense">
+            <span class="stat-nombre">Def. Esp.</span>
+            <span class="barra-stat"><i id="b-sp_defense"></i></span>
+            <input id="f-sp_defense" type="number" min="1" max="999" aria-label="Def. Esp.">
+          </div>
+          <div class="stat" data-stat="speed">
+            <span class="stat-nombre">Velocidad</span>
+            <span class="barra-stat"><i id="b-speed"></i></span>
+            <input id="f-speed" type="number" min="1" max="999" aria-label="Velocidad">
+          </div>
+        <p class="pista">▲ sube y ▼ baja según la naturaleza</p>
+      </div>
+      <div class="guardar-ficha">
+        <span id="estado-ficha" class="estado-guardado" role="status"></span>
+        <button type="submit" class="btn primario">Guardar ficha</button>
+      </div>
+    </form>
     <p id="error-ficha" class="error ficha-error" role="alert"></p>
     <div id="ficha-acciones" class="ficha-acciones"></div>
   </dialog>
@@ -135,6 +192,6 @@
     <ul id="selector-lista" class="lista selector-lista"></ul>
   </dialog>
 
-  <script src="app.js?v=b3"></script>
+  <script src="app.js?v=c1"></script>
 </body>
 </html>

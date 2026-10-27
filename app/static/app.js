@@ -471,9 +471,98 @@ function boton(texto, clase, alPulsar) {
   return b;
 }
 
+// ---------- Ficha editable (C1) ----------
+const ESTADISTICAS = ["hp", "attack", "defense", "sp_attack", "sp_defense", "speed"];
+// La naturaleza dice qué estadística sube y cuál baja (nombres de PokéAPI → campos de la ficha)
+const CAMPO_ESTADISTICA = {
+  attack: "attack", defense: "defense", "special-attack": "sp_attack", "special-defense": "sp_defense", speed: "speed",
+};
+let naturalezas = null; // se piden una sola vez
+let rutaFicha = null;   // ruta del Pokémon cuya ficha está abierta
+
+async function cargarNaturalezas() {
+  if (naturalezas) return;
+  naturalezas = await pedir("/natures");
+  $("f-naturaleza").append(...naturalezas.map((n) => new Option(n.name, n.name)));
+}
+
+function marcarNaturaleza() {
+  const n = (naturalezas || []).find((x) => x.name === $("f-naturaleza").value);
+  for (const fila of document.querySelectorAll(".stat")) {
+    const campo = fila.dataset.stat;
+    fila.classList.toggle("sube", !!n && CAMPO_ESTADISTICA[n.increased] === campo);
+    fila.classList.toggle("baja", !!n && CAMPO_ESTADISTICA[n.decreased] === campo);
+  }
+}
+
+function pintarBarra(campo) {
+  const valor = Number($("f-" + campo).value) || 0;
+  $("b-" + campo).style.width = Math.min(100, (valor / 255) * 100) + "%";
+}
+
+function rellenarFicha(f) {
+  $("f-nivel").value = f.level ?? "";
+  $("f-naturaleza").value = f.nature ?? "";
+  $("f-habilidad").value = f.ability ?? "";
+  $("f-objeto").value = f.item ?? "";
+  for (let i = 0; i < 4; i++) $("f-ataque-" + i).value = f.moves[i] ?? "";
+  for (const campo of ESTADISTICAS) {
+    $("f-" + campo).value = f[campo] ?? "";
+    pintarBarra(campo);
+  }
+  marcarNaturaleza();
+}
+
+async function cargarFicha(ruta) {
+  rutaFicha = ruta;
+  $("form-ficha").reset();
+  $("estado-ficha").textContent = "";
+  try {
+    await cargarNaturalezas();
+    const ficha = await pedir(`/runs/${runActual}/sheet?route=${encodeURIComponent(ruta)}`);
+    if (rutaFicha === ruta) rellenarFicha(ficha); // por si se abrió otra ficha mientras tanto
+  } catch (error) {
+    $("error-ficha").textContent = error.message;
+  }
+}
+
+function numeroONulo(id) {
+  const texto = $(id).value.trim();
+  return texto === "" ? null : Number(texto);
+}
+
+$("form-ficha").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  $("error-ficha").textContent = "";
+  $("estado-ficha").textContent = "";
+  const datos = {
+    level: numeroONulo("f-nivel"),
+    nature: $("f-naturaleza").value || null,
+    ability: $("f-habilidad").value.trim() || null,
+    item: $("f-objeto").value.trim() || null,
+    moves: [0, 1, 2, 3].map((i) => $("f-ataque-" + i).value.trim()).filter(Boolean),
+  };
+  for (const campo of ESTADISTICAS) datos[campo] = numeroONulo("f-" + campo);
+  try {
+    const guardada = await pedir(`/runs/${runActual}/sheet?route=${encodeURIComponent(rutaFicha)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos),
+    });
+    rellenarFicha(guardada);
+    $("estado-ficha").textContent = "Guardado ✓";
+  } catch (error) {
+    $("error-ficha").textContent = error.message;
+  }
+});
+
+$("f-naturaleza").addEventListener("change", marcarNaturaleza);
+for (const campo of ESTADISTICAS) $("f-" + campo).addEventListener("input", () => pintarBarra(campo));
+
 function abrirFicha(p, vivo) {
   const enEquipo = equipoActual.some((q) => q.route === p.route);
   $("error-ficha").textContent = "";
+  cargarFicha(p.route);
   $("ficha-dibujo").replaceChildren(figura(p.species_id, !vivo, 112, 1, true));
   $("ficha-nombre").textContent = p.nickname || p.species;
   $("ficha-sub").textContent = (p.nickname ? p.species + " · " : "") + p.route;

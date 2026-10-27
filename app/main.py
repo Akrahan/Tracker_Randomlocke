@@ -54,6 +54,7 @@ SCHEMA = Path(__file__).with_name("schema.sql")
 SPECIES = Path(__file__).with_name("species.csv")
 TYPES = Path(__file__).with_name("types.csv")
 SPECIES_TYPES = Path(__file__).with_name("species_types.csv")
+NATURES = Path(__file__).with_name("natures.csv")
 
 def conectar() -> psycopg.Connection:
     return psycopg.connect(
@@ -74,6 +75,7 @@ def inicializar_db(intentos: int = 10, espera: int = 2) -> None:
                 conn.execute(esquema)
                 cargar_especies(conn)
                 cargar_tipos(conn)
+                cargar_naturalezas(conn)
             return
         except psycopg.Error:
             if intento == intentos:
@@ -107,6 +109,21 @@ def cargar_tipos(conn: psycopg.Connection) -> None:
             "INSERT INTO species_types (species_id, type_id, slot) VALUES (%s, %s, %s) "
             "ON CONFLICT (species_id, slot) DO UPDATE SET type_id = EXCLUDED.type_id",
             relaciones,
+        )
+
+
+def cargar_naturalezas(conn: psycopg.Connection) -> None:
+    with NATURES.open(encoding="utf-8", newline="") as fichero:
+        filas = [
+            (int(f["id"]), f["name"], f["increased"] or None, f["decreased"] or None)
+            for f in csv.DictReader(fichero)
+        ]
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO natures (id, name, increased, decreased) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
+            "increased = EXCLUDED.increased, decreased = EXCLUDED.decreased",
+            filas,
         )
 
 
@@ -407,7 +424,8 @@ def eliminar_encuentro(run_id: int, route: str = Query(min_length=1, max_length=
             (run_id, route),
         ).fetchone() is None:
             raise HTTPException(status_code=404, detail="No hay ningún encuentro en esa ruta")
-        # Todo en una transacción: el sitio en el equipo, la muerte (si la hay) y la captura o el fallo
+        # Todo en una transacción: la ficha, el sitio en el equipo, la muerte (si la hay) y la captura o el fallo
+        conn.execute("DELETE FROM pokemon_ficha WHERE run_id = %s AND route = %s", (run_id, route))
         conn.execute("DELETE FROM party WHERE run_id = %s AND route = %s", (run_id, route))
         conn.execute("DELETE FROM encounters WHERE run_id = %s AND route = %s", (run_id, route))
     invalidar_equipo(run_id)
@@ -424,6 +442,92 @@ def revivir(run_id: int, route: str = Query(min_length=1, max_length=100)):
         if not borradas:
             raise HTTPException(status_code=404, detail="Ese Pokémon no está muerto")
     invalidar_equipo(run_id)
+
+
+# ---------- Ficha editable (C1) ----------
+ESTADISTICAS = ("hp", "attack", "defense", "sp_attack", "sp_defense", "speed")
+Estadistica = Annotated[int | None, Field(default=None, ge=1, le=999)]
+TextoCorto = Annotated[str, Field(min_length=1, max_length=50)]
+
+
+class FichaNueva(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    level: int | None = Field(default=None, ge=1, le=100)
+    nature: str | None = Field(default=None, max_length=30)
+    ability: str | None = Field(default=None, max_length=50)
+    item: str | None = Field(default=None, max_length=50)
+    moves: list[TextoCorto] = Field(default_factory=list, max_length=4)
+    hp: Estadistica = None
+    attack: Estadistica = None
+    defense: Estadistica = None
+    sp_attack: Estadistica = None
+    sp_defense: Estadistica = None
+    speed: Estadistica = None
+
+
+@app.get("/natures")
+def naturalezas():
+    with conectar() as conn:
+        return conn.execute("SELECT name, increased, decreased FROM natures ORDER BY name").fetchall()
+
+
+def leer_ficha(conn, run_id: int, route: str):
+    fila = conn.execute(
+        "SELECT f.level, n.name AS nature, f.ability, f.item, f.moves, "
+        "f.hp, f.attack, f.defense, f.sp_attack, f.sp_defense, f.speed "
+        "FROM pokemon_ficha f LEFT JOIN natures n ON n.id = f.nature_id "
+        "WHERE f.run_id = %s AND f.route = %s",
+        (run_id, route),
+    ).fetchone()
+    # Un Pokémon sin ficha guardada todavía devuelve todo vacío
+    return fila or {"level": None, "nature": None, "ability": None, "item": None, "moves": [],
+                    **{e: None for e in ESTADISTICAS}}
+
+
+def existe_captura(conn, run_id: int, route: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM encounters WHERE run_id = %s AND route = %s AND event_type = 'captura'",
+        (run_id, route),
+    ).fetchone() is None:
+        raise HTTPException(status_code=404, detail="No hay ningún Pokémon capturado en esa ruta")
+
+
+@app.get("/runs/{run_id}/sheet")
+def ver_ficha(run_id: int, route: str = Query(min_length=1, max_length=100)):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        existe_captura(conn, run_id, route)
+        return leer_ficha(conn, run_id, route)
+
+
+@app.put("/runs/{run_id}/sheet")
+def guardar_ficha(run_id: int, ficha: FichaNueva, route: str = Query(min_length=1, max_length=100)):
+    with conectar() as conn:
+        existe_run(conn, run_id)
+        existe_captura(conn, run_id, route)
+        nature_id = None
+        if ficha.nature:
+            fila = conn.execute("SELECT id FROM natures WHERE lower(name) = lower(%s)", (ficha.nature,)).fetchone()
+            if fila is None:
+                raise HTTPException(status_code=422, detail=f"«{ficha.nature}» no es una naturaleza")
+            nature_id = fila["id"]
+        valores = (
+            ficha.level, nature_id, ficha.ability or None, ficha.item or None, ficha.moves,
+            *(getattr(ficha, e) for e in ESTADISTICAS),
+        )
+        conn.execute(
+            "INSERT INTO pokemon_ficha (run_id, route, level, nature_id, ability, item, moves, "
+            "hp, attack, defense, sp_attack, sp_defense, speed) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (run_id, route) DO UPDATE SET level = EXCLUDED.level, "
+            "nature_id = EXCLUDED.nature_id, ability = EXCLUDED.ability, item = EXCLUDED.item, "
+            "moves = EXCLUDED.moves, hp = EXCLUDED.hp, attack = EXCLUDED.attack, "
+            "defense = EXCLUDED.defense, sp_attack = EXCLUDED.sp_attack, "
+            "sp_defense = EXCLUDED.sp_defense, speed = EXCLUDED.speed, updated_at = now()",
+            (run_id, route, *valores),
+        )
+        return leer_ficha(conn, run_id, route)
 
 
 def leer_party(conn, run_id: int):

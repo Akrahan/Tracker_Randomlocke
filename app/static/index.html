@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=c1">
+  <link rel="stylesheet" href="style.css?v=c2">
 </head>
 <body>
   <header class="cabecera">
@@ -130,7 +130,8 @@
           <label class="campo">Nivel<input id="f-nivel" type="number" min="1" max="100"></label>
           <label class="campo">Naturaleza<select id="f-naturaleza"><option value="">—</option></select></label>
         </div>
-        <label class="campo">Habilidad<input id="f-habilidad" maxlength="50" autocomplete="off"></label>
+        <label class="campo">Habilidad<input id="f-habilidad" list="lista-habilidades" maxlength="50" autocomplete="off"></label>
+        <datalist id="lista-habilidades"></datalist>
         <label class="campo">Objeto<input id="f-objeto" maxlength="50" autocomplete="off"></label>
         <h4>Ataques</h4>
         <div class="ataques">
@@ -174,6 +175,14 @@
           </div>
         <p class="pista">▲ sube y ▼ baja según la naturaleza</p>
       </div>
+      <!-- C2: sugerencias de ataques. Se pueden seguir escribiendo a mano (en un Randomlocke pueden cambiar) -->
+      <div class="aprender">
+        <h4>Puede aprender <span class="opcional">(pulsa para ponerlo en el primer hueco libre)</span></h4>
+        <input id="filtro-ataques" class="filtro" placeholder="Buscar ataque…" aria-label="Buscar ataque" autocomplete="off">
+        <div id="puede-aprender" class="etiquetas"></div>
+        <h4>Olvidados <span class="opcional">(pulsa para recuperarlo)</span></h4>
+        <div id="olvidados" class="etiquetas"></div>
+      </div>
       <div class="guardar-ficha">
         <span id="estado-ficha" class="estado-guardado" role="status"></span>
         <button type="submit" class="btn primario">Guardar ficha</button>
@@ -192,6 +201,6 @@
     <ul id="selector-lista" class="lista selector-lista"></ul>
   </dialog>
 
-  <script src="app.js?v=c1"></script>
+  <script src="app.js?v=c2"></script>
 </body>
 </html>

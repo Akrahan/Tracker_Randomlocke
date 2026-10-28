@@ -55,6 +55,10 @@ SPECIES = Path(__file__).with_name("species.csv")
 TYPES = Path(__file__).with_name("types.csv")
 SPECIES_TYPES = Path(__file__).with_name("species_types.csv")
 NATURES = Path(__file__).with_name("natures.csv")
+MOVES = Path(__file__).with_name("moves.csv")
+SPECIES_MOVES = Path(__file__).with_name("species_moves.csv")
+ABILITIES = Path(__file__).with_name("abilities.csv")
+SPECIES_ABILITIES = Path(__file__).with_name("species_abilities.csv")
 
 def conectar() -> psycopg.Connection:
     return psycopg.connect(
@@ -76,6 +80,7 @@ def inicializar_db(intentos: int = 10, espera: int = 2) -> None:
                 cargar_especies(conn)
                 cargar_tipos(conn)
                 cargar_naturalezas(conn)
+                cargar_ataques_y_habilidades(conn)
             return
         except psycopg.Error:
             if intento == intentos:
@@ -125,6 +130,41 @@ def cargar_naturalezas(conn: psycopg.Connection) -> None:
             "increased = EXCLUDED.increased, decreased = EXCLUDED.decreased",
             filas,
         )
+
+
+def cargar_ataques_y_habilidades(conn: psycopg.Connection) -> None:
+    with MOVES.open(encoding="utf-8", newline="") as fichero:
+        ataques = [(int(f["id"]), f["name"]) for f in csv.DictReader(fichero)]
+    with ABILITIES.open(encoding="utf-8", newline="") as fichero:
+        habilidades = [(int(f["id"]), f["name"]) for f in csv.DictReader(fichero)]
+    with SPECIES_ABILITIES.open(encoding="utf-8", newline="") as fichero:
+        relaciones = [
+            (int(f["species_id"]), int(f["ability_id"]), int(f["slot"]), f["hidden"] == "true")
+            for f in csv.DictReader(fichero)
+        ]
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO moves (id, name) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+            ataques,
+        )
+        cur.executemany(
+            "INSERT INTO abilities (id, name) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+            habilidades,
+        )
+        cur.executemany(
+            "INSERT INTO species_abilities (species_id, ability_id, slot, hidden) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (species_id, slot) DO UPDATE SET ability_id = EXCLUDED.ability_id, hidden = EXCLUDED.hidden",
+            relaciones,
+        )
+        # ~55 000 filas: un upsert fila a fila tardaría segundos en cada arranque. Como nada apunta a
+        # esta tabla, se vacía y se vuelve a llenar con COPY (carga masiva) en la misma transacción.
+        # TRUNCATE bloquea la tabla hasta el COMMIT: si arrancan dos procesos a la vez, el segundo espera.
+        cur.execute("TRUNCATE species_moves")
+        with SPECIES_MOVES.open(encoding="utf-8", newline="") as fichero, cur.copy(
+            "COPY species_moves (species_id, move_id, method, level) FROM STDIN"
+        ) as copia:
+            for f in csv.DictReader(fichero):
+                copia.write_row((int(f["species_id"]), int(f["move_id"]), f["method"], f["level"] or None))
 
 
 def comprobar_db() -> bool:
@@ -474,14 +514,14 @@ def naturalezas():
 
 def leer_ficha(conn, run_id: int, route: str):
     fila = conn.execute(
-        "SELECT f.level, n.name AS nature, f.ability, f.item, f.moves, "
+        "SELECT f.level, n.name AS nature, f.ability, f.item, f.moves, f.forgotten, "
         "f.hp, f.attack, f.defense, f.sp_attack, f.sp_defense, f.speed "
         "FROM pokemon_ficha f LEFT JOIN natures n ON n.id = f.nature_id "
         "WHERE f.run_id = %s AND f.route = %s",
         (run_id, route),
     ).fetchone()
     # Un Pokémon sin ficha guardada todavía devuelve todo vacío
-    return fila or {"level": None, "nature": None, "ability": None, "item": None, "moves": [],
+    return fila or {"level": None, "nature": None, "ability": None, "item": None, "moves": [], "forgotten": [],
                     **{e: None for e in ESTADISTICAS}}
 
 
@@ -491,6 +531,24 @@ def existe_captura(conn, run_id: int, route: str) -> None:
         (run_id, route),
     ).fetchone() is None:
         raise HTTPException(status_code=404, detail="No hay ningún Pokémon capturado en esa ruta")
+
+
+MAX_OLVIDADOS = 20
+
+
+def calcular_olvidados(olvidados: list[str], antes: list[str], ahora: list[str]) -> list[str]:
+    """Los ataques que salen de los 4 huecos pasan a «Olvidados»; los que vuelven a un hueco salen de la lista.
+
+    Se compara sin distinguir mayúsculas y se guardan los más recientes al final."""
+    actuales = {m.lower() for m in ahora}
+    resultado, vistos = [], set()
+    for ataque in [*olvidados, *antes]:
+        clave = ataque.lower()
+        if clave in actuales or clave in vistos:
+            continue
+        vistos.add(clave)
+        resultado.append(ataque)
+    return resultado[-MAX_OLVIDADOS:]
 
 
 @app.get("/runs/{run_id}/sheet")
@@ -512,17 +570,23 @@ def guardar_ficha(run_id: int, ficha: FichaNueva, route: str = Query(min_length=
             if fila is None:
                 raise HTTPException(status_code=422, detail=f"«{ficha.nature}» no es una naturaleza")
             nature_id = fila["id"]
+        # FOR UPDATE: si llegan dos guardados a la vez, el segundo espera y calcula sobre el primero
+        anterior = conn.execute(
+            "SELECT moves, forgotten FROM pokemon_ficha WHERE run_id = %s AND route = %s FOR UPDATE",
+            (run_id, route),
+        ).fetchone() or {"moves": [], "forgotten": []}
         valores = (
             ficha.level, nature_id, ficha.ability or None, ficha.item or None, ficha.moves,
+            calcular_olvidados(anterior["forgotten"], anterior["moves"], ficha.moves),
             *(getattr(ficha, e) for e in ESTADISTICAS),
         )
         conn.execute(
-            "INSERT INTO pokemon_ficha (run_id, route, level, nature_id, ability, item, moves, "
+            "INSERT INTO pokemon_ficha (run_id, route, level, nature_id, ability, item, moves, forgotten, "
             "hp, attack, defense, sp_attack, sp_defense, speed) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON CONFLICT (run_id, route) DO UPDATE SET level = EXCLUDED.level, "
             "nature_id = EXCLUDED.nature_id, ability = EXCLUDED.ability, item = EXCLUDED.item, "
-            "moves = EXCLUDED.moves, hp = EXCLUDED.hp, attack = EXCLUDED.attack, "
+            "moves = EXCLUDED.moves, forgotten = EXCLUDED.forgotten, hp = EXCLUDED.hp, attack = EXCLUDED.attack, "
             "defense = EXCLUDED.defense, sp_attack = EXCLUDED.sp_attack, "
             "sp_defense = EXCLUDED.sp_defense, speed = EXCLUDED.speed, updated_at = now()",
             (run_id, route, *valores),
@@ -617,6 +681,40 @@ def buscar_especies(
     if not prefijo:
         return []
     datos, estado, ttl = leer_especies(prefijo, limit)
+    poner_cabeceras_cache(response, estado, ttl, inicio)
+    return datos
+
+
+# ---------- Lo que puede aprender cada especie (C2) ----------
+ORDEN_METODO = "CASE sm.method WHEN 'level-up' THEN 0 WHEN 'machine' THEN 1 WHEN 'tutor' THEN 2 ELSE 3 END"
+
+
+def leer_aprendizaje(species_id: int):
+    def consultar():
+        with conectar() as conn:
+            if conn.execute("SELECT 1 FROM species WHERE id = %s", (species_id,)).fetchone() is None:
+                return None
+            habilidades = conn.execute(
+                "SELECT a.name, sa.hidden FROM species_abilities sa JOIN abilities a ON a.id = sa.ability_id "
+                "WHERE sa.species_id = %s ORDER BY sa.slot",
+                (species_id,),
+            ).fetchall()
+            ataques = conn.execute(
+                "SELECT m.name, sm.method, sm.level FROM species_moves sm JOIN moves m ON m.id = sm.move_id "
+                f"WHERE sm.species_id = %s ORDER BY {ORDEN_METODO}, sm.level, m.name",
+                (species_id,),
+            ).fetchall()
+        return {"abilities": habilidades, "moves": ataques}
+
+    return leer_con_cache(f"learnset:{species_id}", CACHE_ESPECIES_TTL_S, consultar)
+
+
+@app.get("/species/{species_id}/learnset")
+def aprendizaje(species_id: int, response: Response):
+    inicio = time.perf_counter()
+    datos, estado, ttl = leer_aprendizaje(species_id)
+    if datos is None:
+        raise HTTPException(status_code=404, detail="Esa especie no existe")
     poner_cabeceras_cache(response, estado, ttl, inicio)
     return datos
 

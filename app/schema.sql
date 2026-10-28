@@ -74,3 +74,34 @@ CREATE TABLE IF NOT EXISTS pokemon_ficha (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (run_id, route)
 );
+
+-- C2: ataques olvidados (los que salen de los 4 huecos al guardar). CREATE TABLE IF NOT EXISTS no
+-- cambia una tabla que ya existe, así que la columna nueva se añade aparte (también es idempotente).
+ALTER TABLE pokemon_ficha ADD COLUMN IF NOT EXISTS forgotten TEXT[] NOT NULL DEFAULT '{}';
+
+-- C2: lo que puede aprender cada especie (datos de PokéAPI, juego principal más reciente de cada una)
+CREATE TABLE IF NOT EXISTS moves (
+    id    SMALLINT PRIMARY KEY,
+    name  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS species_moves (
+    species_id  INTEGER  NOT NULL REFERENCES species (id),
+    move_id     SMALLINT NOT NULL REFERENCES moves (id),
+    method      TEXT     NOT NULL CHECK (method IN ('level-up', 'machine', 'tutor', 'egg')),
+    level       SMALLINT,
+    PRIMARY KEY (species_id, move_id)
+);
+
+CREATE TABLE IF NOT EXISTS abilities (
+    id    SMALLINT PRIMARY KEY,
+    name  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS species_abilities (
+    species_id  INTEGER  NOT NULL REFERENCES species (id),
+    ability_id  SMALLINT NOT NULL REFERENCES abilities (id),
+    slot        SMALLINT NOT NULL CHECK (slot IN (1, 2, 3)),
+    hidden      BOOLEAN  NOT NULL,
+    PRIMARY KEY (species_id, slot)
+);

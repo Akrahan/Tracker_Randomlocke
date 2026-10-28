@@ -1,0 +1,285 @@
+id,name
+1,Hedor
+2,Llovizna
+3,Impulso
+4,Armadura Batalla
+5,Robustez
+6,Humedad
+7,Flexibilidad
+8,Velo Arena
+9,Electricidad Estática
+10,Absorbe Electricidad
+11,Absorbe Agua
+12,Despiste
+13,Aclimatación
+14,Ojo Compuesto
+15,Insomnio
+16,Cambio Color
+17,Inmunidad
+18,Absorbe Fuego
+19,Polvo Escudo
+20,Ritmo Propio
+21,Ventosas
+22,Intimidación
+23,Sombra Trampa
+24,Piel Tosca
+25,Superguarda
+26,Levitación
+27,Efecto Espora
+28,Sincronía
+29,Cuerpo Puro
+30,Cura Natural
+31,Pararrayos
+32,Dicha
+33,Nado Rápido
+34,Clorofila
+35,Iluminación
+36,Calco
+37,Potencia
+38,Punto Tóxico
+39,Fuerza Mental
+40,Escudo Magma
+41,Velo Agua
+42,Imán
+43,Insonorizar
+44,Cura Lluvia
+45,Chorro Arena
+46,Presión
+47,Sebo
+48,Madrugar
+49,Cuerpo Llama
+50,Fuga
+51,Vista Lince
+52,Corte Fuerte
+53,Recogida
+54,Ausente
+55,Entusiasmo
+56,Gran Encanto
+57,Más
+58,Menos
+59,Predicción
+60,Viscosidad
+61,Mudar
+62,Agallas
+63,Escama Especial
+64,Lodo Líquido
+65,Espesura
+66,Mar Llamas
+67,Torrente
+68,Enjambre
+69,Cabeza Roca
+70,Sequía
+71,Trampa Arena
+72,Espíritu Vital
+73,Humo Blanco
+74,Energía Pura
+75,Caparazón
+76,Bucle Aire
+77,Tumbos
+78,Electromotor
+79,Rivalidad
+80,Impasible
+81,Manto Níveo
+82,Gula
+83,Irascible
+84,Liviano
+85,Ignífugo
+86,Simple
+87,Piel Seca
+88,Descarga
+89,Puño Férreo
+90,Antídoto
+91,Adaptable
+92,Encadenado
+93,Hidratación
+94,Poder Solar
+95,Pies Rápidos
+96,Normalidad
+97,Francotirador
+98,Muro Mágico
+99,Indefenso
+100,Rezagado
+101,Experto
+102,Defensa Hoja
+103,Zoquete
+104,Rompemoldes
+105,Afortunado
+106,Detonación
+107,Anticipación
+108,Alerta
+109,Ignorante
+110,Cromolente
+111,Filtro
+112,Inicio Lento
+113,Intrépido
+114,Colector
+115,Gélido
+116,Roca Sólida
+117,Nevada
+118,Recogemiel
+119,Cacheo
+120,Audaz
+121,Multitipo
+122,Don Floral
+123,Mal Sueño
+124,Hurto
+125,Potencia Bruta
+126,Respondón
+127,Nerviosismo
+128,Competitivo
+129,Flaqueza
+130,Cuerpo Maldito
+131,Alma Cura
+132,Compiescolta
+133,Armadura Frágil
+134,Metal Pesado
+135,Metal Liviano
+136,Multiescamas
+137,Ímpetu Tóxico
+138,Ímpetu Ardiente
+139,Cosecha
+140,Telepatía
+141,Veleta
+142,Funda
+143,Toque Tóxico
+144,Regeneración
+145,Sacapecho
+146,Ímpetu Arena
+147,Piel Milagro
+148,Cálculo Final
+149,Ilusión
+150,Impostor
+151,Allanamiento
+152,Momia
+153,Autoestima
+154,Justiciero
+155,Cobardía
+156,Espejo Mágico
+157,Herbívoro
+158,Bromista
+159,Poder Arena
+160,Punta Acero
+161,Modo Daruma
+162,Tinovictoria
+163,Turbollama
+164,Terravoltaje
+165,Velo Aroma
+166,Velo Flor
+167,Carrillo
+168,Mutatipo
+169,Pelaje Recio
+170,Prestidigitador
+171,Antibalas
+172,Tenacidad
+173,Mandíbula Fuerte
+174,Piel Helada
+175,Velo Dulce
+176,Cambio Táctico
+177,Alas Vendaval
+178,Megadisparador
+179,Manto Frondoso
+180,Simbiosis
+181,Garra Dura
+182,Piel Feérica
+183,Baba
+186,Aura Oscura
+187,Aura Feérica
+188,Rompeaura
+192,Firmeza
+193,Huida
+194,Retirada
+195,Hidrorrefuerzo
+196,Ensañamiento
+197,Escudo Limitado
+198,Vigilante
+199,Pompa
+200,Acero Templado
+201,Cólera
+202,Quitanieves
+203,Remoto
+204,Voz Fluida
+205,Primer Auxilio
+208,Banco
+209,Disfraz
+212,Corrosión
+213,Letargo Perenne
+214,Regia Presencia
+215,Revés
+216,Pareja de Baile
+217,Batería
+218,Peluche
+219,Cuerpo Vívido
+220,Coránima
+222,Receptor
+224,Ultraimpulso
+225,Sistema Alfa
+226,Electrogénesis
+227,Psicogénesis
+228,Nebulogénesis
+229,Herbogénesis
+230,Guardia Metálica
+231,Guardia Espectro
+232,Armadura Prisma
+234,Espada Indómita
+235,Escudo Recio
+236,Líbero
+237,Recogebolas
+238,Pelusa
+239,Hélice Caudal
+240,Coraza Reflejo
+241,Tragamisil
+242,Acérrimo
+243,Combustible
+244,Punk Rock
+245,Expulsarena
+246,Escama de Hielo
+247,Maduración
+248,Cara de Hielo
+249,Fuente Energía
+251,Antibarrera
+252,Alma Acerada
+253,Cuerpo Mortal
+254,Alma Errante
+256,Gas Reactivo
+258,Mutapetito
+260,Puño Invisible
+262,Transistor
+263,Mandíbula Dragón
+264,Relincho Blanco
+265,Relincho Negro
+268,Olor Persistente
+269,Disemillar
+270,Termoconversión
+271,Coraza Ira
+272,Sal Purificadora
+273,Cuerpo Horneado
+274,Surcavientos
+275,Perro Guardián
+276,Transportarrocas
+277,Energía Eólica
+278,Cambio Heroico
+279,Comandar
+280,Dinamo
+281,Paleosíntesis
+282,Carga Cuark
+283,Cuerpo Áureo
+284,Caldero Debacle
+285,Espada Debacle
+286,Tablilla Debacle
+287,Abalorio Debacle
+288,Latido Oricalco
+289,Motor Hadrónico
+290,Oportunista
+291,Rumia
+292,Cortante
+293,General Supremo
+294,Unísono
+295,Capa Tóxica
+296,Cola Armadura
+297,Geofagia
+298,Poder Fúngico
+300,Néctar Dulce
+301,Hospitalidad
+302,Cadena Tóxica
+304,Teracambio
+307,Títere Tóxico

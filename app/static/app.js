@@ -511,16 +511,103 @@ function rellenarFicha(f) {
     pintarBarra(campo);
   }
   marcarNaturaleza();
+  olvidados = f.forgotten;
+  pintarAprender();
 }
 
-async function cargarFicha(ruta) {
+// ---------- Puede aprender y Olvidados (C2) ----------
+const ETIQUETA_METODO = { machine: "MT", tutor: "Tutor", egg: "Huevo" };
+const aprendizajes = {}; // por especie: no cambian, se piden una sola vez
+let aprendizaje = null;  // lo que puede aprender la especie de la ficha abierta
+let olvidados = [];      // ataques que tuvo y ya no tiene (los calcula el servidor al guardar)
+
+async function cargarAprendizaje(speciesId) {
+  if (!speciesId) return { abilities: [], moves: [] }; // especie desconocida: sin sugerencias
+  aprendizajes[speciesId] ??= await pedir(`/species/${speciesId}/learnset`);
+  return aprendizajes[speciesId];
+}
+
+function huecosAtaque() {
+  return [0, 1, 2, 3].map((i) => $("f-ataque-" + i));
+}
+
+// Pone el ataque en el primer hueco vacío. Si están los 4 llenos no sustituye ninguno: como en los juegos,
+// el jugador decide cuál olvida (lo borra a mano) y al guardar pasa a «Olvidados».
+function ponerAtaque(nombre) {
+  const libre = huecosAtaque().find((hueco) => !hueco.value.trim());
+  if (!libre) {
+    $("estado-ficha").textContent = "";
+    $("error-ficha").textContent = "Los 4 huecos están ocupados: borra uno primero.";
+    return;
+  }
+  $("error-ficha").textContent = "";
+  $("estado-ficha").textContent = "";
+  libre.value = nombre;
+  pintarAprender();
+}
+
+function etiquetaAtaque(nombre, detalle, clase) {
+  const etiqueta = elemento("button", nombre, "et" + (clase ? " " + clase : ""));
+  etiqueta.type = "button";
+  if (detalle) etiqueta.append(elemento("small", detalle));
+  etiqueta.addEventListener("click", () => ponerAtaque(nombre));
+  return etiqueta;
+}
+
+function detalleMetodo(ataque) {
+  if (ataque.method !== "level-up") return ETIQUETA_METODO[ataque.method];
+  return ataque.level ? `Nv. ${ataque.level}` : "Evo.";
+}
+
+// No se sugiere lo que ya está en un hueco
+function pintarAprender() {
+  const puestos = new Set(huecosAtaque().map((h) => h.value.trim().toLowerCase()).filter(Boolean));
+  const filtro = $("filtro-ataques").value.trim().toLowerCase();
+  const libres = (nombre) => !puestos.has(nombre.toLowerCase());
+
+  if (!aprendizaje) {
+    $("puede-aprender").replaceChildren(elemento("span", "Cargando…", "vacio"));
+  } else {
+    const lista = aprendizaje.moves.filter((m) => libres(m.name) && m.name.toLowerCase().includes(filtro));
+    $("puede-aprender").replaceChildren(
+      ...(lista.length ? lista.map((m) => etiquetaAtaque(m.name, detalleMetodo(m)))
+                       : [elemento("span", aprendizaje.moves.length ? "Ninguno coincide." : "Sin datos para esta especie.", "vacio")])
+    );
+  }
+  const recuperables = olvidados.filter(libres).reverse(); // el último olvidado, primero
+  $("olvidados").replaceChildren(
+    ...(recuperables.length ? recuperables.map((m) => etiquetaAtaque(m, "", "olvidado"))
+                            : [elemento("span", "Ninguno todavía.", "vacio")])
+  );
+}
+
+$("filtro-ataques").addEventListener("input", pintarAprender);
+// Enter en el buscador no debe guardar la ficha
+$("filtro-ataques").addEventListener("keydown", (evento) => {
+  if (evento.key === "Enter") evento.preventDefault();
+});
+for (const hueco of huecosAtaque()) hueco.addEventListener("input", pintarAprender);
+
+async function cargarFicha(ruta, speciesId) {
   rutaFicha = ruta;
+  aprendizaje = null;
+  olvidados = [];
   $("form-ficha").reset();
   $("estado-ficha").textContent = "";
+  $("lista-habilidades").replaceChildren();
+  pintarAprender();
   try {
     await cargarNaturalezas();
-    const ficha = await pedir(`/runs/${runActual}/sheet?route=${encodeURIComponent(ruta)}`);
-    if (rutaFicha === ruta) rellenarFicha(ficha); // por si se abrió otra ficha mientras tanto
+    const [ficha, datos] = await Promise.all([
+      pedir(`/runs/${runActual}/sheet?route=${encodeURIComponent(ruta)}`),
+      cargarAprendizaje(speciesId),
+    ]);
+    if (rutaFicha !== ruta) return; // por si se abrió otra ficha mientras tanto
+    aprendizaje = datos;
+    $("lista-habilidades").replaceChildren(
+      ...datos.abilities.map((h) => new Option(h.hidden ? "Habilidad oculta" : "", h.name))
+    );
+    rellenarFicha(ficha);
   } catch (error) {
     $("error-ficha").textContent = error.message;
   }
@@ -562,7 +649,7 @@ for (const campo of ESTADISTICAS) $("f-" + campo).addEventListener("input", () =
 function abrirFicha(p, vivo) {
   const enEquipo = equipoActual.some((q) => q.route === p.route);
   $("error-ficha").textContent = "";
-  cargarFicha(p.route);
+  cargarFicha(p.route, p.species_id);
   $("ficha-dibujo").replaceChildren(figura(p.species_id, !vivo, 112, 1, true));
   $("ficha-nombre").textContent = p.nickname || p.species;
   $("ficha-sub").textContent = (p.nickname ? p.species + " · " : "") + p.route;

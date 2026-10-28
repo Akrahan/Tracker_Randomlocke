@@ -1,0 +1,734 @@
+id,name
+1,Destructor
+5,Megapuño
+6,Día de Pago
+7,Puño Fuego
+8,Puño Hielo
+9,Puño Trueno
+10,Arañazo
+11,Agarre
+12,Guillotina
+14,Danza Espada
+15,Corte
+16,Tornado
+17,Ataque Ala
+18,Remolino
+19,Vuelo
+20,Atadura
+21,Atizar
+22,Látigo Cepa
+23,Pisotón
+24,Doble Patada
+25,Megapatada
+28,Ataque Arena
+29,Golpe Cabeza
+30,Cornada
+31,Ataque Furia
+32,Perforador
+33,Placaje
+34,Golpe Cuerpo
+35,Constricción
+36,Derribo
+37,Saña
+38,Doble Filo
+39,Agitacola
+40,Picotazo Veneno
+42,Pin Misil
+43,Malicioso
+44,Mordisco
+45,Gruñido
+46,Rugido
+47,Canto
+48,Supersónico
+50,Anulación
+51,Ácido
+52,Ascuas
+53,Lanzallamas
+54,Neblina
+55,Pistola Agua
+56,Hidrobomba
+57,Surf
+58,Rayo Hielo
+59,Ventisca
+60,Psicorrayo
+61,Rayo Burbuja
+62,Rayo Aurora
+63,Hiperrayo
+64,Picotazo
+65,Pico Taladro
+66,Sumisión
+67,Patada Baja
+68,Contraataque
+69,Sísmico
+70,Fuerza
+71,Absorber
+72,Megaagotar
+73,Drenadoras
+74,Desarrollo
+75,Hoja Afilada
+76,Rayo Solar
+77,Polvo Veneno
+78,Paralizador
+79,Somnífero
+80,Danza Pétalo
+81,Disparo Demora
+83,Giro Fuego
+84,Impactrueno
+85,Rayo
+86,Onda Trueno
+87,Trueno
+88,Lanzarrocas
+89,Terremoto
+90,Fisura
+91,Excavar
+92,Tóxico
+93,Confusión
+94,Psíquico
+95,Hipnosis
+97,Agilidad
+98,Ataque Rápido
+100,Teletransporte
+101,Tinieblas
+102,Mimético
+103,Chirrido
+104,Doble Equipo
+105,Recuperación
+106,Fortaleza
+107,Reducción
+108,Pantalla de Humo
+109,Rayo Confuso
+110,Refugio
+111,Rizo Defensa
+113,Pantalla de Luz
+114,Niebla
+115,Reflejo
+116,Foco Energía
+117,Venganza
+118,Metrónomo
+120,Autodestrucción
+122,Lengüetazo
+123,Polución
+124,Residuos
+126,Llamarada
+127,Cascada
+129,Meteoros
+130,Cabezazo
+133,Amnesia
+134,Kinético
+135,Ovocuración
+136,Patada Salto Alta
+137,Deslumbrar
+138,Comesueños
+139,Gas Venenoso
+141,Chupavidas
+142,Beso Amoroso
+143,Ataque Aéreo
+144,Transformación
+147,Espora
+148,Destello
+150,Salpicadura
+151,Armadura Ácida
+152,Martillazo
+153,Explosión
+154,Golpes Furia
+155,Huesomerang
+156,Descanso
+157,Avalancha
+158,Hipercolmillo
+160,Conversión
+161,Triataque
+162,Superdiente
+163,Cuchillada
+164,Sustituto
+166,Esquema
+167,Triple Patada
+168,Ladrón
+170,Telépata
+172,Rueda Fuego
+173,Ronquido
+174,Maldición
+175,Azote
+176,Conversión 2
+177,Aerochorro
+178,Esporagodón
+179,Inversión
+180,Rencor
+181,Nieve Polvo
+182,Protección
+183,Ultrapuño
+184,Cara Susto
+186,Beso Dulce
+187,Tambor
+188,Bomba Lodo
+189,Bofetón Lodo
+190,Pulpocañón
+191,Púas
+192,Electrocañón
+193,Profecía
+194,Mismo Destino
+195,Canto Mortal
+196,Viento Hielo
+197,Detección
+198,Ataque Óseo
+199,Fijar Blanco
+200,Enfado
+201,Tormenta de Arena
+202,Gigadrenado
+203,Aguante
+204,Encanto
+205,Rodar
+206,Falso Tortazo
+207,Fanfarronear
+208,Batido
+209,Chispa
+210,Corte Furia
+211,Ala de Acero
+212,Mal de Ojo
+213,Atracción
+214,Sonámbulo
+215,Cascabel Cura
+216,Retribución
+217,Presente
+218,Frustración
+219,Velo Sagrado
+220,Divide Dolor
+221,Fuego Sagrado
+223,Puño Dinámico
+224,Megacuerno
+225,Dragoaliento
+226,Relevo
+227,Otra Vez
+228,Persecución
+229,Giro Rápido
+230,Dulce Aroma
+231,Cola Férrea
+232,Garra Metal
+233,Llave Vital
+234,Sol Matinal
+235,Fotosíntesis
+236,Luz Lunar
+237,Poder Oculto
+238,Tajo Cruzado
+239,Ciclón
+240,Danza Lluvia
+241,Día Soleado
+242,Triturar
+243,Manto Espejo
+244,Autosugestión
+245,Velocidad Extrema
+246,Poder Pasado
+247,Bola Sombra
+248,Premonición
+249,Golpe Roca
+250,Torbellino
+251,Paliza
+252,Sorpresa
+253,Alboroto
+254,Reserva
+255,Escupir
+256,Tragar
+257,Onda Ígnea
+258,Granizo
+259,Tormento
+260,Camelo
+261,Fuego Fatuo
+262,Legado
+263,Fachada
+264,Puño Certero
+266,Señuelo
+267,Adaptación
+268,Carga
+269,Mofa
+270,Refuerzo
+271,Truco
+272,Imitación
+273,Deseo
+275,Arraigo
+276,Fuerza Bruta
+277,Capa Mágica
+278,Reciclaje
+279,Desquite
+280,Demolición
+281,Bostezo
+282,Desarme
+283,Esfuerzo
+284,Estallido
+285,Intercambio
+286,Sellar
+287,Alivio
+288,Rabia
+291,Buceo
+292,Empujón
+294,Luminicola
+295,Resplandor
+296,Bola Neblina
+297,Danza Pluma
+298,Danza Caos
+299,Patada Ígnea
+300,Chapoteo Lodo
+303,Relajo
+304,Vozarrón
+305,Colmillo Veneno
+306,Garra Brutal
+307,Anillo Ígneo
+308,Hidrocañón
+309,Puño Meteoro
+310,Impresionar
+311,Meteorobola
+312,Aromaterapia
+313,Llanto Falso
+314,Aire Afilado
+315,Sofoco
+316,Rastreo
+317,Tumba Rocas
+319,Eco Metálico
+320,Silbato
+321,Cosquillas
+322,Masa Cósmica
+323,Salpicar
+324,Rayo Señal
+325,Puño Sombra
+326,Paranormal
+328,Bucle Arena
+329,Frío Polar
+330,Agua Lodosa
+331,Semilladora
+332,Golpe Aéreo
+333,Carámbano
+334,Defensa Férrea
+335,Bloqueo
+336,Aullido
+337,Garra Dragón
+338,Planta Feroz
+339,Corpulencia
+340,Bote
+341,Disparo Lodo
+342,Cola Veneno
+343,Antojo
+345,Hoja Mágica
+346,Hidrochorro
+347,Paz Mental
+348,Hoja Aguda
+349,Danza Dragón
+350,Pedrada
+351,Onda Voltio
+352,Hidropulso
+353,Deseo Oculto
+354,Psicoataque
+355,Respiro
+356,Gravedad
+359,Machada
+360,Giro Bola
+361,Deseo Cura
+362,Salmuera
+363,Don Natural
+364,Amago
+365,Picoteo
+366,Viento Afín
+367,Acupresión
+368,Represión Metal
+369,Ida y Vuelta
+370,A Bocajarro
+371,Vendetta
+372,Buena Baza
+374,Lanzamiento
+375,Psicocambio
+379,Truco Fuerza
+380,Bilis
+383,Copión
+384,Cambiafuerza
+385,Cambiadefensa
+387,Última Baza
+388,Abatidoras
+389,Golpe Bajo
+390,Púas Tóxicas
+391,Cambiaalmas
+392,Acua Aro
+393,Levitón
+394,Envite Ígneo
+395,Palmeo
+396,Esfera Aural
+397,Pulimento
+398,Puya Nociva
+399,Pulso Umbrío
+400,Tajo Umbrío
+401,Acua Cola
+402,Bomba Germen
+403,Tajo Aéreo
+404,Tijera X
+405,Zumbido
+406,Pulso Dragón
+407,Carga Dragón
+408,Joya de Luz
+409,Puño Drenaje
+410,Onda Vacío
+411,Onda Certera
+412,Energibola
+413,Pájaro Osado
+414,Tierra Viva
+415,Trapicheo
+416,Gigaimpacto
+417,Maquinación
+418,Puño Bala
+419,Alud
+420,Esquirla Helada
+421,Garra Umbría
+422,Colmillo Rayo
+423,Colmillo Hielo
+424,Colmillo Ígneo
+425,Sombra Vil
+427,Psicocorte
+428,Cabezazo Zen
+430,Cañón Resplandor
+431,Treparrocas
+432,Despejar
+433,Espacio Raro
+434,Cometa Draco
+435,Chispazo
+436,Humareda
+437,Lluevehojas
+438,Latigazo
+439,Romperrocas
+440,Veneno X
+441,Lanzamugre
+442,Cabeza de Hierro
+444,Roca Afilada
+445,Seducción
+446,Trampa Rocas
+447,Hierba Lazo
+448,Cháchara
+449,Sentencia
+450,Picadura
+451,Rayo Carga
+452,Mazazo
+453,Acua Jet
+454,Al Ataque
+455,A Defender
+457,Testarazo
+458,Doble Golpe
+459,Distorsión
+460,Corte Vacío
+461,Danza Lunar
+462,Agarrón
+463,Lluvia Ígnea
+464,Brecha Negra
+465,Fulgor Semilla
+467,Golpe Umbrío
+468,Afilagarras
+469,Vasta Guardia
+470,Isoguardia
+471,Isofuerza
+472,Zona Extraña
+473,Psicocarga
+474,Carga Tóxica
+475,Aligerar
+476,Polvo Ira
+478,Zona Mágica
+479,Antiaéreo
+480,Llave Corsé
+481,Pirotecnia
+482,Onda Tóxica
+483,Danza Aleteo
+484,Cuerpo Pesado
+486,Bola Voltio
+487,Empapar
+488,Nitrocarga
+489,Enrosque
+490,Puntapié
+491,Bomba Ácida
+492,Juego Sucio
+493,Onda Simple
+494,Danza Amiga
+495,Cede Paso
+496,Canon
+497,Eco Voz
+499,Niebla Clara
+500,Poder Reserva
+501,Anticipo
+502,Cambio de Banda
+503,Escaldar
+504,Rompecoraza
+505,Pulso Cura
+506,Infortunio
+508,Cambio de Marcha
+509,Llave Giro
+510,Calcinación
+511,Último Lugar
+512,Acróbata
+513,Clonatipo
+514,Represalia
+515,Sacrificio
+517,Infierno
+518,Voto Agua
+519,Voto Fuego
+520,Voto Planta
+521,Voltiocambio
+522,Estoicismo
+523,Terratemblor
+524,Vaho Gélido
+525,Cola Dragón
+526,Avivar
+527,Electrotela
+528,Voltio Cruel
+529,Taladradora
+530,Golpe Bis
+532,Asta Drenaje
+533,Espada Santa
+534,Concha Filo
+535,Golpe Calor
+536,Ciclón de Hojas
+538,Rizo Algodón
+539,Pulso Noche
+540,Onda Mental
+541,Plumerazo
+542,Vendaval
+543,Ariete
+544,Rueda Doble
+545,Bomba Ígnea
+546,Tecno Shock
+547,Canto Arcaico
+548,Sable Místico
+549,Mundo Gélido
+550,Ataque Fulgor
+551,Llama Azul
+552,Danza Llama
+555,Alarido
+556,Chuzos
+557,V de Fuego
+558,Llama Fusión
+559,Rayo Fusión
+560,Plancha Voladora
+562,Eructo
+563,Fertilizante
+564,Red Viscosa
+565,Aguijón Letal
+566,Golpe Fantasma
+567,Halloween
+568,Rugido de Guerra
+570,Carga Parábola
+571,Condena Silvana
+572,Tormenta Floral
+573,Liofilización
+574,Voz Cautivadora
+575,Última Palabra
+576,Reversión
+577,Beso Drenaje
+578,Truco Defensa
+579,Defensa Floral
+580,Campo de Hierba
+581,Campo de Niebla
+582,Electrificación
+583,Carantoña
+584,Viento Feérico
+585,Fuerza Lunar
+586,Estruendo
+587,Cerrojo Feérico
+588,Escudo Real
+589,Camaradería
+590,Confidencia
+591,Tormenta de Diamantes
+592,Chorro de Vapor
+593,Paso Dimensional
+594,Shuriken de Agua
+595,Llama Embrujada
+596,Barrera Espinosa
+597,Niebla Aromática
+598,Onda Anómala
+599,Trampa Venenosa
+601,Geocontrol
+602,Aura Magnética
+604,Campo Eléctrico
+605,Brillo Mágico
+608,Ojitos Tiernos
+609,Moflete Estático
+611,Acoso
+612,Puño Incremento
+613,Ala Mortífera
+614,Mil Flechas
+615,Mil Temblores
+616,Fuerza Telúrica
+618,Pulso Primigenio
+619,Filo del Abismo
+620,Ascenso Draco
+659,Recogearena
+660,Escaramuza
+661,Búnker
+662,Puntada Sombría
+663,Lariat Oscuro
+664,Aria Burbuja
+665,Martillo Hielo
+666,Cura Floral
+667,Fuerza Equina
+668,Absorbefuerza
+669,Cuchilla Solar
+670,Follaje
+672,Hilo Venenoso
+673,Aguzar
+674,Piñón Auxiliar
+675,Golpe Mordaza
+676,Bola de Polen
+677,Anclaje
+678,Campo Psíquico
+679,Plancha
+680,Látigo Ígneo
+681,Chulería
+682,Llama Final
+683,Cambiavelocidad
+684,Cuerno Certero
+685,Purificación
+686,Danza Despertar
+687,Núcleo Castigo
+688,Patada Tropical
+689,Mandato
+690,Pico Cañón
+691,Fragor Escamas
+692,Martillo Dragón
+693,Giro Vil
+694,Velo Aurora
+704,Coraza Trampa
+705,Cañón Floral
+706,Psicocolmillo
+707,Pataleta
+709,Roca Veloz
+710,Hidroariete
+711,Láser Prisma
+712,Robasombra
+713,Meteoimpacto
+714,Rayo Umbrío
+715,Ojos Llorosos
+716,Electropunzada
+717,Furia Natural
+718,Multiataque
+720,Cabeza Sorpresa
+721,Puños Plasma
+722,Géiser Fotónico
+742,Ferropuño Doble
+744,Cañón Dinamax
+745,Disparo Certero
+746,Presa Maxilar
+747,Atiborramiento
+748,Bastión Final
+749,Alquitranazo
+750,Polvo Mágico
+751,Dracoflechas
+752,Hora del Té
+753,Octopresa
+754,Electropico
+755,Branquibocado
+756,Cambio de Cancha
+775,Estruendo Escama
+776,Plancha Corporal
+777,Decoración
+778,Batería Asalto
+780,Balón Ígneo
+783,Rueda Aural
+784,Vasto Impacto
+785,Punzada Rama
+786,Amplificador
+787,Ácido Málico
+788,Fuerza G
+789,Choque Anímico
+791,Gota Vital
+792,Obstrucción
+793,Irreverencia
+794,Asalto Estelar
+796,Metaláser
+797,Vasta Fuerza
+798,Allanador Férreo
+799,Ráfaga Escamas
+800,Rayo Meteórico
+802,Bruma Explosiva
+803,Fitoimpulso
+804,Alto Voltaje
+805,Pulso de Campo
+806,Golpe Rastrero
+807,Envidia Ardiente
+808,Desahogo
+809,Poltergeist
+810,Gas Corrosivo
+811,Motivación
+812,Viraje
+813,Triple Axel
+814,Ala Bis
+815,Arenas Ardientes
+816,Cura Selvática
+817,Golpe Oscuro
+819,Electrojaula
+820,Dracoenergía
+827,Garra Nociva
+828,Asalto Barrera
+830,Hachazo Pétreo
+831,Ciclón Primavera
+832,Poder Místico
+833,Erupción de Ira
+834,Envite Acuático
+838,Arremetida
+839,Mil Púas Tóxicas
+846,Vendaval Gélido
+847,Electormenta
+848,Simún de Arena
+849,Plegaria Lunar
+850,Bálsamo Osado
+851,Teraexplosión
+852,Telatrampa
+853,Patada Hacha
+854,Homenaje Póstumo
+855,Fotocolisión
+856,Oído Cocina
+857,Puño Jet
+858,Extracto Picante
+859,Quemarrueda
+860,Proliferación
+861,Pirueta Helada
+862,Asalto Espadón
+863,Plegaria Vital
+864,Salazón
+865,Triple Inmersión
+866,Giro Mortífero
+867,Decalcomanía
+868,Deslome
+869,Genufendiente
+870,Truco Floral
+871,Canto Ardiente
+872,Danza Acuática
+873,Furia Taurina
+874,Fiebre Dorada
+875,Psicohojas
+876,Hidrovapor
+877,Calamidad
+878,Nitrochoque
+879,Electroderrape
+880,Autotomía
+881,Fría Acogida
+882,Limpieza General
+883,Paisaje Nevado
+884,Brinco
+885,Abrecaminos
+886,Agua Fría
+887,Hipertaladro
+888,Láser Doble
+889,Puño Furia
+890,Cañón Armadura
+891,Espada Lamento
+892,Electropalmas
+893,Martillo Colosal
+894,Resarcimiento
+895,Tajo Acuático
+902,Cañón Batidor
+903,Bomba Caramelo
+904,Garrote Liana
+905,Electrorrayo
+906,Teraclúster
+907,Láser Veleidoso
+908,Llama Protectora
+909,Relámpago Súbito
+910,Filo Potente
+911,Tajo Taquión
+912,Prensa Metálica
+913,Bramido Dragón
+914,Canto Encantador
+915,Cólera Ardiente
+916,Plancha Voltaica
+917,Psicorruido
+918,Palma Rauda
+919,Cadena Virulenta

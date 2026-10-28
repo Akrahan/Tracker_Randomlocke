@@ -19,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 
+import reglas
+
 
 DB_HOST = os.environ["DB_HOST"]
 DB_USER = os.environ["POSTGRES_USER"]
@@ -329,14 +331,55 @@ class RunNueva(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=100)
+    # Sin modo, «personalizada» sin reglas: así quien la creaba solo con el nombre sigue funcionando igual
+    mode: Literal[reglas.MODOS] = "personalizada"
+    rules: dict | None = None  # solo en «personalizada»; en los otros modos se copia su plantilla
+
+
+@app.get("/rules")
+def catalogo_reglas():
+    return reglas.catalogo_publico()
+
+
+def comprobar_reglas(conn, propuestas: dict) -> dict:
+    try:
+        limpias = reglas.validar(propuestas)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    # Lo que necesita la base de datos: que las especies y los tipos existan (se guardan los nombres oficiales)
+    if "especies_prohibidas" in limpias:
+        pedidas = limpias["especies_prohibidas"]
+        filas = conn.execute(
+            "SELECT name FROM species WHERE lower(name) = ANY(%s)", ([e.lower() for e in pedidas],)
+        ).fetchall()
+        oficiales = {f["name"].lower(): f["name"] for f in filas}
+        desconocidas = [e for e in pedidas if e.lower() not in oficiales]
+        if desconocidas:
+            raise HTTPException(status_code=422, detail=f"«{desconocidas[0]}» no es una especie de la lista")
+        limpias["especies_prohibidas"] = list(dict.fromkeys(oficiales[e.lower()] for e in pedidas))
+    for clave in ("monotipo", "tipo_prohibido"):
+        if clave in limpias and conn.execute(
+            "SELECT 1 FROM types WHERE identifier = %s", (limpias[clave],)
+        ).fetchone() is None:
+            raise HTTPException(status_code=422, detail=f"«{limpias[clave]}» no es un tipo")
+    if limpias.get("monotipo") and limpias.get("monotipo") == limpias.get("tipo_prohibido"):
+        raise HTTPException(status_code=422, detail="El tipo del Monolocke no puede ser el tipo prohibido")
+    return limpias
 
 
 @app.post("/runs", status_code=201)
 def crear_run(run: RunNueva):
     with conectar() as conn:
+        if run.mode == "personalizada":
+            reglas_run = comprobar_reglas(conn, run.rules or {})
+        elif run.rules:
+            raise HTTPException(status_code=422, detail="Las reglas solo se eligen en una partida personalizada")
+        else:
+            reglas_run = reglas.PLANTILLAS[run.mode]  # copia de la plantilla: si cambia, esta partida no
         return conn.execute(
-            "INSERT INTO runs (name) VALUES (%s) RETURNING id, name, created_at",
-            (run.name,),
+            "INSERT INTO runs (name, mode, rules) VALUES (%s, %s, %s) "
+            "RETURNING id, name, created_at, mode, rules",
+            (run.name, run.mode, Jsonb(reglas_run)),
         ).fetchone()
 
 
@@ -419,7 +462,7 @@ def listar_runs():
     # Una sola consulta con todo lo que necesita la portada: contadores y el equipo de cada partida.
     with conectar() as conn:
         return conn.execute(
-            "SELECT r.id, r.name, r.created_at, "
+            "SELECT r.id, r.name, r.created_at, r.mode, r.rules, "
             "(SELECT count(*) FROM encounters c WHERE c.run_id = r.id "
             "AND c.event_type = 'captura' AND " + VIVO + ") AS alive, "
             "(SELECT count(*) FROM encounters c WHERE c.run_id = r.id AND c.event_type = 'muerte') AS dead, "

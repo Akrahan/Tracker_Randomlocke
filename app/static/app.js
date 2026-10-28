@@ -175,6 +175,7 @@ async function mostrarInicio() {
     const tarjeta = elemento("button", undefined, "partida");
     tarjeta.type = "button";
     tarjeta.append(
+      elemento("span", NOMBRE_MODO[run.mode], "modo"),
       elemento("h3", run.name),
       elemento("div", `${run.alive} vivos · ${run.dead} muertos`, "meta")
     );
@@ -194,10 +195,7 @@ async function mostrarInicio() {
   const contenido = elemento("span");
   contenido.append(elemento("span", "+", "mas"), elemento("span", "Nueva partida"));
   nueva.append(contenido);
-  nueva.addEventListener("click", () => {
-    $("nombre-run").value = "";
-    $("dialogo-nueva").showModal();
-  });
+  nueva.addEventListener("click", abrirNuevaPartida);
 
   $("rejilla").replaceChildren(...tarjetas, nueva);
   mostrarVista("inicio");
@@ -214,6 +212,7 @@ async function abrirPartida(id) {
   }
   runActual = id;
   $("titulo-partida").textContent = run.name;
+  $("modo-partida").textContent = NOMBRE_MODO[run.mode];
   mostrarVista("partida");
   await cargarRun();
 }
@@ -405,16 +404,81 @@ async function cargarRun() {
   pintarFallos(eventos.filter((e) => e.event_type === "fallo"));
 }
 
-$("form-run").addEventListener("submit", async (evento) => {
-  evento.preventDefault();
+// ---------- Nueva partida: modo y reglas (ideas 2 + 6) ----------
+// El catálogo de reglas y las plantillas vienen del servidor (GET /rules): aquí solo se pintan.
+const NOMBRE_MODO = { normal: "Normal", nuzlocke: "Nuzlocke", randomlocke: "Randomlocke" };
+const DESCRIPCION_MODO = {
+  normal: "Sin reglas: solo llevar el registro de la partida.",
+  nuzlocke: "Las reglas clásicas del Nuzlocke.",
+  randomlocke: "Nuzlocke con el juego aleatorizado.",
+};
+const MODO_INICIAL = "randomlocke";
+let catalogo = null; // se pide una sola vez
+
+async function cargarCatalogo() {
+  if (catalogo) return;
+  catalogo = await pedir("/rules");
+  pintarModos();
+}
+
+function modoElegido() {
+  return document.querySelector('input[name="modo"]:checked').value;
+}
+
+function pintarModos() {
+  $("modos").replaceChildren(...catalogo.modes.map((modo) => {
+    const opcion = elemento("label", undefined, "modo-opcion");
+    const radio = elemento("input");
+    radio.type = "radio";
+    radio.name = "modo";
+    radio.value = modo;
+    radio.addEventListener("change", mostrarReglasDelModo);
+    opcion.append(radio, elemento("strong", NOMBRE_MODO[modo]), elemento("small", DESCRIPCION_MODO[modo]));
+    return opcion;
+  }));
+}
+
+// La lista de lo que trae la plantilla del modo elegido (solo lectura)
+function mostrarReglasDelModo() {
+  const modo = modoElegido();
+  const activas = catalogo.rules.filter((r) => r.clave in catalogo.templates[modo]);
+  const lista = (titulo, reglas) => {
+    if (!reglas.length) return [];
+    const ul = elemento("ul", undefined, "lista-reglas");
+    ul.append(...reglas.map((r) => elemento("li", r.nombre)));
+    return [elemento("h4", titulo), ul];
+  };
+  $("reglas-modo").replaceChildren(
+    ...(activas.length ? [] : [elemento("p", "Ninguna regla activa.", "vacio")]),
+    ...lista("Reglas", activas.filter((r) => r.grupo !== "aleatorizado")),
+    ...lista("Aleatorizado", activas.filter((r) => r.grupo === "aleatorizado")),
+  );
+}
+
+async function abrirNuevaPartida() {
   mostrarMensaje("");
   try {
-    const run = await pedir("/runs", enviarJSON({ name: $("nombre-run").value }));
+    await cargarCatalogo();
+  } catch (error) {
+    mostrarMensaje(error.message);
+    return;
+  }
+  $("form-run").reset();
+  $("error-run").textContent = "";
+  document.querySelector(`input[name="modo"][value="${MODO_INICIAL}"]`).checked = true;
+  mostrarReglasDelModo();
+  $("dialogo-nueva").showModal();
+}
+
+$("form-run").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  $("error-run").textContent = "";
+  try {
+    const run = await pedir("/runs", enviarJSON({ name: $("nombre-run").value, mode: modoElegido() }));
     $("dialogo-nueva").close();
     location.hash = `#/partida/${run.id}`;
   } catch (error) {
-    $("dialogo-nueva").close();
-    mostrarMensaje(error.message);
+    $("error-run").textContent = error.message; // la ventana sigue abierta: no se pierde lo elegido
   }
 });
 

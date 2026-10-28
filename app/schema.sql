@@ -5,10 +5,11 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 
 -- Ideas 2 + 6: modo de juego y reglas de cada partida (ver app/reglas.py). Se añaden con ALTER porque la
--- tabla ya existe; el DEFAULT rellena las partidas que ya había: «personalizada» sin reglas, que se
--- comporta igual que antes.
-ALTER TABLE runs ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'personalizada'
+-- tabla ya existe; el DEFAULT rellena las partidas que ya había: «normal» (sin reglas), que se comporta
+-- igual que antes. «personalizada» sigue permitida en la base de datos, pero está aplazada (28 oct.).
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'normal'
     CHECK (mode IN ('normal', 'nuzlocke', 'randomlocke', 'personalizada'));
+ALTER TABLE runs ALTER COLUMN mode SET DEFAULT 'normal';
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS rules JSONB NOT NULL DEFAULT '{}'
     CHECK (jsonb_typeof(rules) = 'object');
 

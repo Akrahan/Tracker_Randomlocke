@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tracker Randomlocke</title>
-  <link rel="stylesheet" href="style.css?v=c2">
+  <link rel="stylesheet" href="style.css?v=m3c">
 </head>
 <body>
   <header class="cabecera">
@@ -36,6 +36,7 @@
       <div class="barra">
         <a class="btn" href="#/">← Partidas</a>
         <h2 id="titulo-partida"></h2>
+        <span id="modo-partida" class="modo"></span>
         <div id="contadores" class="contadores"></div>
         <button type="button" class="btn primario" id="abrir-registro">+ Nuevo encuentro</button>
       </div>
@@ -70,11 +71,19 @@
     </section>
   </main>
 
-  <!-- Ventana para crear una partida -->
-  <dialog id="dialogo-nueva">
+  <!-- Ventana para crear una partida: nombre y modo, con las reglas que trae (catálogo de GET /rules) -->
+  <dialog id="dialogo-nueva" class="nueva-partida">
     <form id="form-run" method="dialog">
       <h3>Nueva partida</h3>
-      <input id="nombre-run" placeholder="Nombre de la partida" maxlength="100" required autocomplete="off">
+      <label class="campo">Nombre
+        <input id="nombre-run" placeholder="Por ejemplo: Esmeralda Randomlocke" maxlength="100" required autocomplete="off">
+      </label>
+      <fieldset class="modos">
+        <legend class="campo">Modo</legend>
+        <div id="modos" class="modos-opciones"></div>
+      </fieldset>
+      <div id="reglas-modo" class="reglas-modo"></div>
+      <p id="error-run" class="error" role="alert"></p>
       <div class="botones">
         <button type="button" class="btn" id="cancelar-nueva">Cancelar</button>
         <button type="submit" class="btn primario">Crear</button>
@@ -201,6 +210,6 @@
     <ul id="selector-lista" class="lista selector-lista"></ul>
   </dialog>
 
-  <script src="app.js?v=c2"></script>
+  <script src="app.js?v=m3c"></script>
 </body>
 </html>
